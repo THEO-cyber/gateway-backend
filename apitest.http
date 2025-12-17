@@ -1,0 +1,293 @@
+### HND Gateway Backend API Tests
+### Base URL
+@baseUrl = http://localhost:5000
+@token = YOUR_TOKEN_HERE
+
+###############################################
+### 1. HEALTH CHECK
+###############################################
+
+### Health Check
+GET {{baseUrl}}/health
+
+###############################################
+### 2. AUTHENTICATION
+###############################################
+
+### Register New User
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "theocyber57@gmail.com",
+  "password": "HELLOWORLD2.",
+  "firstName": "Theo",
+  "lastName": "Michael"
+}
+
+### Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@hnd.com",
+  "password": "Admin123456"
+}
+
+### Forgot Password
+POST {{baseUrl}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "admin@hnd.com"
+}
+
+### Verify OTP
+POST {{baseUrl}}/api/auth/verify-otp
+Content-Type: application/json
+
+{
+  "email": "admin@hnd.com",
+  "otp": "123456"
+}
+
+### Reset Password
+POST {{baseUrl}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "email": "admin@hnd.com",
+  "otp": "123456",
+  "newPassword": "NewPassword123"
+}
+
+### Get Current User Info
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{token}}
+
+###############################################
+### 3. PAST PAPERS
+###############################################
+
+### Get All Papers
+GET {{baseUrl}}/api/papers
+Authorization: Bearer {{token}}
+
+### Get Papers with Filters
+GET {{baseUrl}}/api/papers?department=Computer Science&course=Programming&year=2023&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Upload Paper (Multipart/Form-Data)
+POST {{baseUrl}}/api/papers/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="department"
+
+Computer Science
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="course"
+
+Programming
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="year"
+
+2023
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test.pdf"
+Content-Type: application/pdf
+
+< ./test.pdf
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Get Available Years for Course
+GET {{baseUrl}}/api/papers/years/Programming
+Authorization: Bearer {{token}}
+
+### Download Paper (Replace PAPER_ID)
+GET {{baseUrl}}/api/papers/download/PAPER_ID
+Authorization: Bearer {{token}}
+
+### Search Papers
+GET {{baseUrl}}/api/papers/search?q=algorithm&department=Computer Science
+Authorization: Bearer {{token}}
+
+### Delete Paper (Replace PAPER_ID)
+DELETE {{baseUrl}}/api/papers/PAPER_ID
+Authorization: Bearer {{token}}
+
+###############################################
+### 4. Q&A - QUESTIONS
+###############################################
+
+### Get All Questions
+GET {{baseUrl}}/api/qa/questions
+Authorization: Bearer {{token}}
+
+### Get Questions with Filters
+GET {{baseUrl}}/api/qa/questions?department=Computer Science&subject=Math&sortBy=recent&page=1&limit=10
+Authorization: Bearer {{token}}
+
+### Get Questions by Sort (popular, unanswered)
+GET {{baseUrl}}/api/qa/questions?sortBy=popular
+Authorization: Bearer {{token}}
+
+### Get Single Question (Replace QUESTION_ID)
+GET {{baseUrl}}/api/qa/questions/QUESTION_ID
+Authorization: Bearer {{token}}
+
+### Ask New Question
+POST {{baseUrl}}/api/qa/questions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "question": "How do I solve quadratic equations?",
+  "subject": "Mathematics",
+  "department": "Computer Science",
+  "tags": ["math", "algebra", "equations"]
+}
+
+### Like Question (Replace QUESTION_ID)
+POST {{baseUrl}}/api/qa/questions/QUESTION_ID/like
+Authorization: Bearer {{token}}
+
+### Delete Question (Replace QUESTION_ID)
+DELETE {{baseUrl}}/api/qa/questions/QUESTION_ID
+Authorization: Bearer {{token}}
+
+###############################################
+### 5. Q&A - ANSWERS
+###############################################
+
+### Answer a Question (Replace QUESTION_ID)
+POST {{baseUrl}}/api/qa/questions/QUESTION_ID/answer
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "answer": "To solve quadratic equations, use the formula: x = (-b ± √(b²-4ac)) / 2a"
+}
+
+### Like an Answer (Replace QUESTION_ID and ANSWER_ID)
+POST {{baseUrl}}/api/qa/questions/QUESTION_ID/answers/ANSWER_ID/like
+Authorization: Bearer {{token}}
+
+### Accept an Answer (Replace QUESTION_ID and ANSWER_ID)
+POST {{baseUrl}}/api/qa/questions/QUESTION_ID/answers/ANSWER_ID/accept
+Authorization: Bearer {{token}}
+
+### Delete an Answer (Replace QUESTION_ID and ANSWER_ID)
+DELETE {{baseUrl}}/api/qa/questions/QUESTION_ID/answers/ANSWER_ID
+Authorization: Bearer {{token}}
+
+###############################################
+### 6. AI ASSISTANT
+###############################################
+
+### Chat with AI
+POST {{baseUrl}}/api/ai/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "message": "Explain the concept of recursion in programming",
+  "conversationHistory": []
+}
+
+### Chat with History
+POST {{baseUrl}}/api/ai/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "message": "Can you give me an example?",
+  "conversationHistory": [
+    {
+      "role": "user",
+      "content": "Explain recursion"
+    },
+    {
+      "role": "assistant",
+      "content": "Recursion is when a function calls itself..."
+    }
+  ]
+}
+
+### Get AI Explanation
+POST {{baseUrl}}/api/ai/explain
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "topic": "Binary Search Tree",
+  "context": "Data Structures course"
+}
+
+### Get AI Explanation (Simple)
+POST {{baseUrl}}/api/ai/explain
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "topic": "Object-Oriented Programming"
+}
+
+###############################################
+### 7. COMPLETE WORKFLOW EXAMPLE
+###############################################
+
+### Step 1: Register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "student@example.com",
+  "password": "Student123",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+
+### Step 2: Login (Copy token from response)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "student@example.com",
+  "password": "Student123"
+}
+
+### Step 3: Ask a Question (Use token from Step 2)
+POST {{baseUrl}}/api/qa/questions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "question": "What is the difference between stack and heap memory?",
+  "subject": "Operating Systems",
+  "department": "Computer Science",
+  "tags": ["memory", "stack", "heap"]
+}
+
+### Step 4: Get My Questions
+GET {{baseUrl}}/api/qa/questions?sortBy=recent
+Authorization: Bearer {{token}}
+
+### Step 5: Chat with AI
+POST {{baseUrl}}/api/ai/chat
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "message": "Help me understand the difference between stack and heap memory"
+}
+
+###############################################
+### NOTES
+###############################################
+# 1. Replace {{token}} with your actual JWT token from login response
+# 2. Replace QUESTION_ID, ANSWER_ID, PAPER_ID with actual IDs from responses
+# 3. For file uploads, replace './test.pdf' with actual file path
+# 4. Install REST Client extension in VS Code to run these tests
+# 5. Click "Send Request" above each ### to execute
