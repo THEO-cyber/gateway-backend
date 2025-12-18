@@ -36,6 +36,18 @@ const pastPaperSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  status: {
+    type: String,
+    enum: ["pending", "approved", "rejected"],
+    default: "approved",
+  },
+  rejectionReason: {
+    type: String,
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
   createdAt: {
     type: Date,
     default: Date.now,

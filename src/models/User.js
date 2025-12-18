@@ -21,6 +21,35 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true,
   },
+  role: {
+    type: String,
+    enum: ["student", "admin"],
+    default: "student",
+  },
+  department: {
+    type: String,
+    trim: true,
+  },
+  yearOfStudy: {
+    type: String,
+    trim: true,
+  },
+  bio: {
+    type: String,
+    trim: true,
+  },
+  avatar: {
+    type: String,
+    default: "",
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+  isBanned: {
+    type: Boolean,
+    default: false,
+  },
   resetPasswordOTP: String,
   resetPasswordExpire: Date,
   createdAt: {

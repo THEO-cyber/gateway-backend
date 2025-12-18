@@ -7,18 +7,30 @@ const {
   downloadPaper,
   deletePaper,
   searchPapers,
+  approvePaper,
+  rejectPaper,
+  getPaperStats,
+  bulkUploadPapers,
 } = require("../controllers/paperController");
 const { protect } = require("../middleware/auth");
+const { isActiveUser, isAdmin } = require("../middleware/adminAuth");
 const upload = require("../middleware/upload");
 
 // All routes require authentication
 router.use(protect);
+router.use(isActiveUser);
 
 router.get("/", getPapers);
 router.post("/upload", upload.single("file"), uploadPaper);
-router.get("/years/:course", getAvailableYears);
-router.get("/download/:id", downloadPaper);
-router.delete("/:id", deletePaper);
 router.get("/search", searchPapers);
+router.get("/years/:course", getAvailableYears);
+router.get("/:id/download", downloadPaper);
+router.delete("/:id", deletePaper);
+
+// Admin only routes
+router.put("/:id/approve", isAdmin, approvePaper);
+router.put("/:id/reject", isAdmin, rejectPaper);
+router.get("/stats", isAdmin, getPaperStats);
+router.post("/bulk-upload", isAdmin, upload.array("files"), bulkUploadPapers);
 
 module.exports = router;

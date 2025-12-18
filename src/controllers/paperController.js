@@ -238,3 +238,132 @@ exports.searchPapers = async (req, res) => {
     });
   }
 };
+
+// @route   PUT /api/papers/:id/approve
+// @desc    Approve paper
+// @access  Private (Admin only)
+exports.approvePaper = async (req, res) => {
+  try {
+    const paper = await PastPaper.findById(req.params.id);
+    if (!paper) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Paper not found", code: "NOT_FOUND" });
+    }
+
+    paper.status = "approved";
+    paper.approvedBy = req.user._id;
+    await paper.save();
+
+    res.json({
+      success: true,
+      message: "Paper approved successfully",
+      data: paper,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to approve paper",
+        code: "APPROVE_ERROR",
+      });
+  }
+};
+
+// @route   PUT /api/papers/:id/reject
+// @desc    Reject paper
+// @access  Private (Admin only)
+exports.rejectPaper = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const paper = await PastPaper.findById(req.params.id);
+    if (!paper) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Paper not found", code: "NOT_FOUND" });
+    }
+
+    paper.status = "rejected";
+    paper.rejectionReason = reason;
+    await paper.save();
+
+    res.json({ success: true, message: "Paper rejected", data: paper });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to reject paper",
+        code: "REJECT_ERROR",
+      });
+  }
+};
+
+// @route   GET /api/papers/stats
+// @desc    Get paper statistics
+// @access  Private (Admin only)
+exports.getPaperStats = async (req, res) => {
+  try {
+    const totalPapers = await PastPaper.countDocuments();
+    const pendingPapers = await PastPaper.countDocuments({ status: "pending" });
+    const approvedPapers = await PastPaper.countDocuments({
+      status: "approved",
+    });
+    const rejectedPapers = await PastPaper.countDocuments({
+      status: "rejected",
+    });
+
+    const totalDownloads = await PastPaper.aggregate([
+      { $group: { _id: null, total: { $sum: "$downloads" } } },
+    ]);
+
+    const byDepartment = await PastPaper.aggregate([
+      {
+        $group: {
+          _id: "$department",
+          count: { $sum: 1 },
+          downloads: { $sum: "$downloads" },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
+
+    const byYear = await PastPaper.aggregate([
+      { $group: { _id: "$year", count: { $sum: 1 } } },
+      { $sort: { _id: -1 } },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalPapers,
+        pendingPapers,
+        approvedPapers,
+        rejectedPapers,
+        totalDownloads: totalDownloads[0]?.total || 0,
+        byDepartment,
+        byYear,
+      },
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to fetch paper stats",
+        code: "STATS_ERROR",
+      });
+  }
+};
+
+// @route   POST /api/papers/bulk-upload
+// @desc    Bulk upload papers (placeholder)
+// @access  Private (Admin only)
+exports.bulkUploadPapers = async (req, res) => {
+  res.status(501).json({
+    success: false,
+    error: "Bulk upload not implemented yet. Upload papers one at a time.",
+    code: "NOT_IMPLEMENTED",
+  });
+};
