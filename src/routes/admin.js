@@ -20,6 +20,7 @@ const {
   getDownloadsStats,
   getAnnouncementsStats,
   getCoursesStats,
+  getRecentActivity,
 } = require("../controllers/adminController");
 const { protect } = require("../middleware/auth");
 const { isAdmin } = require("../middleware/adminAuth");
@@ -38,6 +39,9 @@ router.get("/qa/stats", getQaStats);
 router.get("/downloads/stats", getDownloadsStats);
 router.get("/announcements/stats", getAnnouncementsStats);
 router.get("/courses/stats", getCoursesStats);
+
+// Activity endpoint
+router.get("/activity/recent", getRecentActivity);
 
 // User management
 router.get("/users", getAllUsers);

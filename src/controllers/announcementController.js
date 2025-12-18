@@ -112,9 +112,11 @@ exports.createAnnouncement = async (req, res) => {
       data: announcement,
     });
   } catch (error) {
+    console.error("Create announcement error:", error);
     res.status(500).json({
       success: false,
       error: "Failed to create announcement",
+      message: error.message,
       code: "CREATE_ERROR",
     });
   }

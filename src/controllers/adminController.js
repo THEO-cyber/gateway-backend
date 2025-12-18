@@ -800,3 +800,81 @@ exports.getCoursesStats = async (req, res) => {
     });
   }
 };
+
+// @route   GET /api/admin/activity/recent
+// @desc    Get recent activity across the platform
+// @access  Private (Admin only)
+exports.getRecentActivity = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Get recent users
+    const recentUsers = await User.find()
+      .select("firstName lastName email createdAt")
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Get recent papers
+    const recentPapers = await PastPaper.find()
+      .select("title courseCode uploadedBy createdAt")
+      .populate("uploadedBy", "firstName lastName")
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Get recent questions
+    const recentQuestions = await Question.find()
+      .select("title subject userId createdAt")
+      .populate("userId", "firstName lastName")
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Combine and sort all activities
+    const activities = [
+      ...recentUsers.map((u) => ({
+        type: "user",
+        action: "New user registered",
+        user: `${u.firstName} ${u.lastName}`,
+        email: u.email,
+        timestamp: u.createdAt,
+      })),
+      ...recentPapers.map((p) => ({
+        type: "paper",
+        action: "Paper uploaded",
+        title: p.title,
+        course: p.courseCode,
+        user: p.uploadedBy
+          ? `${p.uploadedBy.firstName} ${p.uploadedBy.lastName}`
+          : "Unknown",
+        timestamp: p.createdAt,
+      })),
+      ...recentQuestions.map((q) => ({
+        type: "question",
+        action: "Question asked",
+        title: q.title,
+        subject: q.subject,
+        user: q.userId
+          ? `${q.userId.firstName} ${q.userId.lastName}`
+          : "Unknown",
+        timestamp: q.createdAt,
+      })),
+    ];
+
+    // Sort by timestamp and limit
+    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const recentActivities = activities.slice(0, limit);
+
+    res.json({
+      success: true,
+      data: recentActivities,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch recent activity",
+      error: error.message,
+    });
+  }
+};
