@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const PastPaper = require("../models/PastPaper");
 const Question = require("../models/Question");
+const Announcement = require("../models/Announcement");
+const Course = require("../models/Course");
 
 // @route   GET /api/admin/stats
 // @desc    Get dashboard statistics
@@ -521,6 +523,280 @@ exports.getUserStats = async (req, res) => {
       success: false,
       error: "Failed to fetch user stats",
       code: "USER_STATS_ERROR",
+    });
+  }
+};
+
+// @route   GET /api/admin/users/stats
+// @desc    Get user statistics for admin dashboard
+// @access  Private (Admin only)
+exports.getUserStatsForDashboard = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const studentCount = await User.countDocuments({ role: "student" });
+    const adminCount = await User.countDocuments({ role: "admin" });
+    const activeCount = await User.countDocuments({ isActive: true });
+    const bannedCount = await User.countDocuments({ isBanned: true });
+
+    // New users in last 7 days
+    const newUsersWeek = await User.countDocuments({
+      createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    });
+
+    // New users in last 30 days
+    const newUsersMonth = await User.countDocuments({
+      createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        studentCount,
+        adminCount,
+        activeCount,
+        bannedCount,
+        newUsersWeek,
+        newUsersMonth,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch user statistics",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/admin/papers/stats
+// @desc    Get papers statistics for admin dashboard
+// @access  Private (Admin only)
+exports.getPapersStats = async (req, res) => {
+  try {
+    const totalPapers = await PastPaper.countDocuments();
+    const pendingPapers = await PastPaper.countDocuments({ status: "pending" });
+    const approvedPapers = await PastPaper.countDocuments({
+      status: "approved",
+    });
+    const rejectedPapers = await PastPaper.countDocuments({
+      status: "rejected",
+    });
+
+    const totalDownloads = await PastPaper.aggregate([
+      { $group: { _id: null, total: { $sum: "$downloads" } } },
+    ]);
+
+    // Papers added in last 7 days
+    const newPapersWeek = await PastPaper.countDocuments({
+      createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    });
+
+    // Papers added in last 30 days
+    const newPapersMonth = await PastPaper.countDocuments({
+      createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalPapers,
+        pendingPapers,
+        approvedPapers,
+        rejectedPapers,
+        totalDownloads: totalDownloads[0]?.total || 0,
+        newPapersWeek,
+        newPapersMonth,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch papers statistics",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/admin/qa/stats
+// @desc    Get Q&A statistics for admin dashboard
+// @access  Private (Admin only)
+exports.getQaStats = async (req, res) => {
+  try {
+    const totalQuestions = await Question.countDocuments();
+    const featuredQuestions = await Question.countDocuments({
+      isFeatured: true,
+    });
+
+    const totalAnswers = await Question.aggregate([
+      { $unwind: "$answers" },
+      { $count: "total" },
+    ]);
+
+    // Questions in last 7 days
+    const newQuestionsWeek = await Question.countDocuments({
+      createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    });
+
+    // Questions in last 30 days
+    const newQuestionsMonth = await Question.countDocuments({
+      createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+    });
+
+    // Unanswered questions
+    const unansweredQuestions = await Question.countDocuments({
+      answersCount: 0,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalQuestions,
+        featuredQuestions,
+        totalAnswers: totalAnswers[0]?.total || 0,
+        newQuestionsWeek,
+        newQuestionsMonth,
+        unansweredQuestions,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch Q&A statistics",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/admin/downloads/stats
+// @desc    Get downloads statistics for admin dashboard
+// @access  Private (Admin only)
+exports.getDownloadsStats = async (req, res) => {
+  try {
+    const totalDownloads = await PastPaper.aggregate([
+      { $group: { _id: null, total: { $sum: "$downloads" } } },
+    ]);
+
+    // Downloads in last 7 days (approximation - count papers with recent download activity)
+    const downloadsWeek = await PastPaper.aggregate([
+      {
+        $match: {
+          updatedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$downloads" } } },
+    ]);
+
+    // Downloads in last 30 days
+    const downloadsMonth = await PastPaper.aggregate([
+      {
+        $match: {
+          updatedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$downloads" } } },
+    ]);
+
+    // Top 5 most downloaded papers
+    const topPapers = await PastPaper.find()
+      .sort({ downloads: -1 })
+      .limit(5)
+      .select("title courseCode downloads");
+
+    res.json({
+      success: true,
+      data: {
+        totalDownloads: totalDownloads[0]?.total || 0,
+        downloadsWeek: downloadsWeek[0]?.total || 0,
+        downloadsMonth: downloadsMonth[0]?.total || 0,
+        topPapers,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch downloads statistics",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/admin/announcements/stats
+// @desc    Get announcements statistics for admin dashboard
+// @access  Private (Admin only)
+exports.getAnnouncementsStats = async (req, res) => {
+  try {
+    const totalAnnouncements = await Announcement.countDocuments();
+    const activeAnnouncements = await Announcement.countDocuments({
+      isActive: true,
+    });
+    const pinnedAnnouncements = await Announcement.countDocuments({
+      isPinned: true,
+    });
+
+    // Announcements by category
+    const byCategory = await Announcement.aggregate([
+      { $group: { _id: "$category", count: { $sum: 1 } } },
+    ]);
+
+    // Total views
+    const totalViews = await Announcement.aggregate([
+      { $group: { _id: null, total: { $sum: "$viewCount" } } },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalAnnouncements,
+        activeAnnouncements,
+        pinnedAnnouncements,
+        byCategory,
+        totalViews: totalViews[0]?.total || 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch announcements statistics",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/admin/courses/stats
+// @desc    Get courses statistics for admin dashboard
+// @access  Private (Admin only)
+exports.getCoursesStats = async (req, res) => {
+  try {
+    const totalCourses = await Course.countDocuments();
+    const activeCourses = await Course.countDocuments({ isActive: true });
+
+    // Courses with papers count
+    const coursesWithPapers = await PastPaper.aggregate([
+      { $group: { _id: "$courseCode", count: { $sum: 1 } } },
+    ]);
+
+    // Top 5 courses by papers count
+    const topCourses = await PastPaper.aggregate([
+      { $group: { _id: "$courseCode", paperCount: { $sum: 1 } } },
+      { $sort: { paperCount: -1 } },
+      { $limit: 5 },
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        totalCourses,
+        activeCourses,
+        coursesWithPapers: coursesWithPapers.length,
+        topCourses,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch courses statistics",
+      error: error.message,
     });
   }
 };

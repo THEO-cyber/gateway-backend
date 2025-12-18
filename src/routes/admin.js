@@ -14,6 +14,12 @@ const {
   deleteAnyAnswer,
   getPopularPapers,
   getActiveUsers,
+  getUserStatsForDashboard,
+  getPapersStats,
+  getQaStats,
+  getDownloadsStats,
+  getAnnouncementsStats,
+  getCoursesStats,
 } = require("../controllers/adminController");
 const { protect } = require("../middleware/auth");
 const { isAdmin } = require("../middleware/adminAuth");
@@ -24,6 +30,14 @@ router.use(isAdmin);
 
 // Dashboard statistics
 router.get("/stats", getDashboardStats);
+
+// Statistics endpoints for admin dashboard
+router.get("/users/stats", getUserStatsForDashboard);
+router.get("/papers/stats", getPapersStats);
+router.get("/qa/stats", getQaStats);
+router.get("/downloads/stats", getDownloadsStats);
+router.get("/announcements/stats", getAnnouncementsStats);
+router.get("/courses/stats", getCoursesStats);
 
 // User management
 router.get("/users", getAllUsers);
