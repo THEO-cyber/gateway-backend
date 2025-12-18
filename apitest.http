@@ -1,7 +1,10 @@
 ### HND Gateway Backend API Tests
-### Base URL
-@baseUrl = http://localhost:5000
+### Base URL - PRODUCTION
+@baseUrl = https://gateway-backend-qfjh.onrender.com
 @token = YOUR_TOKEN_HERE
+
+### Base URL - LOCAL (for testing locally)
+# @baseUrl = http://localhost:5000
 
 ###############################################
 ### 1. HEALTH CHECK

@@ -585,3 +585,38 @@ exports.getMyQuestions = async (req, res) => {
     });
   }
 };
+
+// @route   PUT /api/questions/:id/feature
+// @desc    Mark question as featured (Admin only)
+// @access  Private (Admin only)
+exports.featureQuestion = async (req, res) => {
+  try {
+    const question = await Question.findById(req.params.id);
+    if (!question) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          error: "Question not found",
+          code: "NOT_FOUND",
+        });
+    }
+
+    question.isFeatured = !question.isFeatured;
+    await question.save();
+
+    res.json({
+      success: true,
+      message: `Question ${question.isFeatured ? "featured" : "unfeatured"}`,
+      data: question,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to feature question",
+        code: "FEATURE_ERROR",
+      });
+  }
+};

@@ -49,9 +49,18 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // API Routes
 app.use("/api/auth", require("./routes/auth"));
+app.use("/api/dashboard", require("./routes/dashboard"));
+app.use("/api/users", require("./routes/users"));
 app.use("/api/papers", require("./routes/papers"));
 app.use("/api/qa", require("./routes/qa"));
 app.use("/api/ai", require("./routes/ai"));
+app.use("/api/admin", require("./routes/admin"));
+app.use("/api/departments", require("./routes/content"));
+app.use("/api/courses", require("./routes/content"));
+app.use("/api/subjects", require("./routes/content"));
+app.use("/api/tags", require("./routes/content"));
+app.use("/api/announcements", require("./routes/announcements"));
+app.use("/api/analytics", require("./routes/analytics"));
 
 // Health check
 app.get("/health", (req, res) => {

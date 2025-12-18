@@ -31,7 +31,7 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Create user (defaults to student role)
     const user = await User.create({
       email,
       password: hashedPassword,
@@ -51,6 +51,7 @@ exports.register = async (req, res) => {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          role: user.role,
         },
         token,
       },
@@ -89,6 +90,21 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Check if user is banned or inactive
+    if (user.isBanned) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been banned. Please contact support.",
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been deactivated. Please contact support.",
+      });
+    }
+
     // Generate token
     const token = generateToken(user._id);
 
@@ -101,6 +117,154 @@ exports.login = async (req, res) => {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          role: user.role,
+          department: user.department,
+          yearOfStudy: user.yearOfStudy,
+        },
+        token,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Login failed",
+      error: error.message,
+    });
+  }
+};
+
+// @route   POST /api/auth/login/admin
+// @desc    Login for admin panel only
+// @access  Public
+exports.loginAdmin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email }).select("+password");
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Check if user is admin
+    if (user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. This login is for administrators only. Please use the student app.",
+      });
+    }
+
+    // Check if user is banned or inactive
+    if (user.isBanned || !user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been suspended. Please contact support.",
+      });
+    }
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    res.json({
+      success: true,
+      message: "Admin login successful",
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+        },
+        token,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Login failed",
+      error: error.message,
+    });
+  }
+};
+
+// @route   POST /api/auth/login/student
+// @desc    Login for student app only
+// @access  Public
+exports.loginStudent = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email }).select("+password");
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // Check if user is student
+    if (user.role === "admin") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Access denied. Administrator accounts cannot use the student app. Please use the admin panel.",
+      });
+    }
+
+    // Check if user is banned or inactive
+    if (user.isBanned) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been banned. Please contact support.",
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been deactivated. Please contact support.",
+      });
+    }
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    res.json({
+      success: true,
+      message: "Login successful",
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          department: user.department,
+          yearOfStudy: user.yearOfStudy,
         },
         token,
       },
@@ -279,6 +443,81 @@ exports.getMe = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// @route   POST /api/auth/verify
+// @desc    Verify token validity
+// @access  Private
+exports.verifyToken = async (req, res) => {
+  try {
+    // If protect middleware passed, token is valid
+    res.json({
+      success: true,
+      message: "Token is valid",
+      data: {
+        user: {
+          id: req.user._id,
+          email: req.user.email,
+          role: req.user.role,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Verification failed",
+      error: error.message,
+    });
+  }
+};
+
+// @route   POST /api/auth/logout
+// @desc    Logout user (client-side token removal)
+// @access  Private
+exports.logout = async (req, res) => {
+  try {
+    // In JWT, logout is handled client-side by removing the token
+    // This endpoint exists for consistency and can be used for logging
+    res.json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Logout failed",
+      error: error.message,
+    });
+  }
+};
+
+// @route   POST /api/auth/refresh
+// @desc    Refresh JWT token
+// @access  Private
+exports.refreshToken = async (req, res) => {
+  try {
+    // Generate new token
+    const token = generateToken(req.user._id);
+
+    res.json({
+      success: true,
+      message: "Token refreshed successfully",
+      data: {
+        token,
+        user: {
+          id: req.user._id,
+          email: req.user.email,
+          role: req.user.role,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Token refresh failed",
       error: error.message,
     });
   }
