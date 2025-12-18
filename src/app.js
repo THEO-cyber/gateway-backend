@@ -61,6 +61,7 @@ app.use("/api/subjects", require("./routes/content"));
 app.use("/api/tags", require("./routes/content"));
 app.use("/api/announcements", require("./routes/announcements"));
 app.use("/api/analytics", require("./routes/analytics"));
+app.use("/api/settings", require("./routes/settings"));
 
 // Health check
 app.get("/health", (req, res) => {
