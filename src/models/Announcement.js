@@ -12,7 +12,17 @@ const announcementSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ["general", "urgent", "maintenance", "update", "event"],
+    enum: [
+      "general",
+      "urgent",
+      "maintenance",
+      "update",
+      "event",
+      "academic",
+      "exam",
+      "holiday",
+      "deadline",
+    ],
     default: "general",
   },
   targetAudience: {

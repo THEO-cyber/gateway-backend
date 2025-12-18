@@ -20,6 +20,8 @@ app.use(
       "http://hndgatewayadminpanel.kesug.com",
       "http://localhost:3000",
       "http://localhost:5173",
+      "http://127.0.0.1:5500",
+      "http://localhost:5500",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -27,11 +29,13 @@ app.use(
   })
 );
 
-// Rate limiting
+// Rate limiting - more lenient for development
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX) || 500, // Increased from 100 to 500
   message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use("/api", limiter);
 
@@ -55,10 +59,11 @@ app.use("/api/papers", require("./routes/papers"));
 app.use("/api/qa", require("./routes/qa"));
 app.use("/api/ai", require("./routes/ai"));
 app.use("/api/admin", require("./routes/admin"));
-app.use("/api/departments", require("./routes/content"));
-app.use("/api/courses", require("./routes/content"));
-app.use("/api/subjects", require("./routes/content"));
-app.use("/api/tags", require("./routes/content"));
+app.use("/api/content", require("./routes/content")); // Unified content route
+app.use("/api/departments", require("./routes/content")); // Backward compatibility
+app.use("/api/courses", require("./routes/content")); // Backward compatibility
+app.use("/api/subjects", require("./routes/content")); // Backward compatibility
+app.use("/api/tags", require("./routes/content")); // Backward compatibility
 app.use("/api/announcements", require("./routes/announcements"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/settings", require("./routes/settings"));
