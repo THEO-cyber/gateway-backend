@@ -261,13 +261,11 @@ exports.approvePaper = async (req, res) => {
       data: paper,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to approve paper",
-        code: "APPROVE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to approve paper",
+      code: "APPROVE_ERROR",
+    });
   }
 };
 
@@ -290,13 +288,11 @@ exports.rejectPaper = async (req, res) => {
 
     res.json({ success: true, message: "Paper rejected", data: paper });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to reject paper",
-        code: "REJECT_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to reject paper",
+      code: "REJECT_ERROR",
+    });
   }
 };
 
@@ -347,23 +343,191 @@ exports.getPaperStats = async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch paper stats",
-        code: "STATS_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch paper stats",
+      code: "STATS_ERROR",
+    });
   }
 };
 
 // @route   POST /api/papers/bulk-upload
-// @desc    Bulk upload papers (placeholder)
+// @desc    Bulk upload multiple papers at once
 // @access  Private (Admin only)
 exports.bulkUploadPapers = async (req, res) => {
-  res.status(501).json({
-    success: false,
-    error: "Bulk upload not implemented yet. Upload papers one at a time.",
-    code: "NOT_IMPLEMENTED",
-  });
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please upload at least one PDF file",
+      });
+    }
+
+    const { title, department, year, description } = req.body;
+
+    if (!title || !department || !year) {
+      // Delete uploaded files if validation fails
+      req.files.forEach((file) => fs.unlinkSync(file.path));
+      return res.status(400).json({
+        success: false,
+        message: "Title, department, and year are required",
+      });
+    }
+
+    const uploadedPapers = [];
+    const errors = [];
+
+    // Process each uploaded file
+    for (const file of req.files) {
+      try {
+        const fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
+          file.filename
+        }`;
+
+        const paper = await PastPaper.create({
+          course: title, // Using title as course name
+          department,
+          year: parseInt(year),
+          description: description || "",
+          fileName: file.originalname,
+          fileUrl,
+          fileSize: file.size,
+          uploadedBy: req.user._id,
+        });
+
+        uploadedPapers.push(paper);
+      } catch (error) {
+        errors.push({
+          fileName: file.originalname,
+          error: error.message,
+        });
+        // Don't delete the file, keep it for debugging
+      }
+    }
+
+    if (uploadedPapers.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload any papers",
+        errors,
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `${uploadedPapers.length} paper(s) uploaded successfully`,
+      data: {
+        uploadedPapers,
+        errors: errors.length > 0 ? errors : undefined,
+      },
+    });
+  } catch (error) {
+    // Delete uploaded files on error
+    if (req.files) {
+      req.files.forEach((file) => {
+        try {
+          fs.unlinkSync(file.path);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Bulk upload failed",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/papers/departments
+// @desc    Get all departments with papers
+// @access  Public
+exports.getDepartments = async (req, res) => {
+  try {
+    const departments = await PastPaper.aggregate([
+      { $match: { status: "approved" } },
+      { $group: { _id: "$department", count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          department: "$_id",
+          paperCount: "$count",
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: departments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch departments",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/papers/years/:department
+// @desc    Get available years for a department
+// @access  Public
+exports.getYearsByDepartment = async (req, res) => {
+  try {
+    const { department } = req.params;
+
+    const years = await PastPaper.aggregate([
+      { $match: { department, status: "approved" } },
+      { $group: { _id: "$year", count: { $sum: 1 } } },
+      { $sort: { _id: -1 } }, // Most recent first
+      {
+        $project: {
+          _id: 0,
+          year: "$_id",
+          paperCount: "$count",
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: years,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch years",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/papers/titles/:department/:year
+// @desc    Get paper titles (courses) for a department and year
+// @access  Public
+exports.getTitlesByDepartmentAndYear = async (req, res) => {
+  try {
+    const { department, year } = req.params;
+
+    const papers = await PastPaper.find({
+      department,
+      year: parseInt(year),
+      status: "approved",
+    })
+      .select("course fileName fileUrl downloads createdAt _id")
+      .sort({ course: 1 });
+
+    res.json({
+      success: true,
+      data: papers,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch papers",
+      error: error.message,
+    });
+  }
 };

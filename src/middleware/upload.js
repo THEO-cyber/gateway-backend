@@ -5,7 +5,17 @@ const fs = require("fs");
 // Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadPath = path.join(__dirname, "../../uploads/papers");
+    // Determine folder based on route or field name
+    let folder = "papers"; // default
+
+    if (
+      req.path.includes("/study-materials") ||
+      file.fieldname === "material"
+    ) {
+      folder = "materials";
+    }
+
+    const uploadPath = path.join(__dirname, `../../uploads/${folder}`);
 
     // Create directory if it doesn't exist
     if (!fs.existsSync(uploadPath)) {

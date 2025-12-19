@@ -64,6 +64,70 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
+// @route   GET /api/admin/dashboard/stats
+// @desc    Get simplified dashboard stats
+// @access  Private (Admin only)
+exports.getSimplifiedDashboardStats = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const totalPapers = await PastPaper.countDocuments();
+    const totalQuestions = await Question.countDocuments();
+
+    const totalDownloads = await PastPaper.aggregate([
+      { $group: { _id: null, total: { $sum: "$downloads" } } },
+    ]);
+
+    res.json({
+      totalUsers,
+      totalPapers,
+      totalQuestions,
+      totalDownloads: totalDownloads[0]?.total || 0,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch dashboard stats",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/admin/dashboard/quick-stats
+// @desc    Get quick stats for today
+// @access  Private (Admin only)
+exports.getQuickStats = async (req, res) => {
+  try {
+    const Test = require("../models/Test");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const activeToday = await User.countDocuments({
+      lastLogin: { $gte: today },
+    });
+
+    const pendingApprovals = await PastPaper.countDocuments({
+      status: "pending",
+    });
+
+    const scheduledTests = await Test.countDocuments({
+      status: "scheduled",
+      date: { $gte: today },
+    });
+
+    res.json({
+      activeToday,
+      pendingApprovals,
+      scheduledTests,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch quick stats",
+      error: error.message,
+    });
+  }
+};
+
 // @route   GET /api/admin/users
 // @desc    Get all users with filters
 // @access  Private (Admin only)
@@ -806,7 +870,7 @@ exports.getCoursesStats = async (req, res) => {
 // @access  Private (Admin only)
 exports.getRecentActivity = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 5;
 
     // Get recent users
     const recentUsers = await User.find()

@@ -15,6 +15,10 @@ const pastPaperSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  description: {
+    type: String,
+    trim: true,
+  },
   fileName: {
     type: String,
     required: true,
