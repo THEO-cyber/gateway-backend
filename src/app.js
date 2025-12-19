@@ -69,6 +69,7 @@ app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/settings", require("./routes/settings"));
 app.use("/api/tests", require("./routes/tests")); // Tests & quizzes
 app.use("/api/study-materials", require("./routes/studyMaterials")); // Study materials
+app.use("/api/content/materials", require("./routes/studyMaterials")); // Admin panel alias
 app.use("/api/students", require("./routes/students")); // Student profiles
 
 // Health check
