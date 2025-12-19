@@ -14,14 +14,14 @@ if (supabaseUrl && supabaseKey) {
  * Upload file to Supabase Storage
  * @param {Buffer} fileBuffer - File buffer
  * @param {string} fileName - Name of the file
- * @param {string} bucket - Supabase bucket name (default: 'papers')
+ * @param {string} bucket - Supabase bucket name (default: 'HND GATEWAY PDF')
  * @param {string} folder - Folder path (default: 'papers')
  * @returns {Promise<{url: string, path: string}>}
  */
 const uploadFile = async (
   fileBuffer,
   fileName,
-  bucket = "papers",
+  bucket = "HND GATEWAY PDF",
   folder = "papers"
 ) => {
   if (!supabase) {
@@ -59,10 +59,10 @@ const uploadFile = async (
 /**
  * Delete file from Supabase Storage
  * @param {string} filePath - Path to file in storage
- * @param {string} bucket - Supabase bucket name (default: 'papers')
+ * @param {string} bucket - Supabase bucket name
  * @returns {Promise<boolean>}
  */
-const deleteFile = async (filePath, bucket = "papers") => {
+const deleteFile = async (filePath, bucket = "HND GATEWAY PDF") => {
   if (!supabase) {
     console.warn("Supabase is not configured. Skipping file deletion.");
     return false;
