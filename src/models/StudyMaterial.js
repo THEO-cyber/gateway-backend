@@ -32,6 +32,9 @@ const studyMaterialSchema = new mongoose.Schema({
   fileSize: {
     type: Number,
   },
+  storagePath: {
+    type: String,
+  },
   visible: {
     type: Boolean,
     default: true,

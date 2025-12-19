@@ -31,6 +31,9 @@ const pastPaperSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  storagePath: {
+    type: String,
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
