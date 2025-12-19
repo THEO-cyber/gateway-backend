@@ -1,0 +1,207 @@
+const StudyMaterial = require("../models/StudyMaterial");
+const fs = require("fs").promises;
+const path = require("path");
+
+// @route   POST /api/study-materials
+// @desc    Upload study material (PDF, video, or link)
+// @access  Private (Admin only)
+exports.createStudyMaterial = async (req, res) => {
+  try {
+    const { title, type, department, description, url } = req.body;
+
+    if (!title || !type || !department) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, type, and department are required",
+      });
+    }
+
+    const materialData = {
+      title,
+      type,
+      department,
+      description,
+      createdBy: req.user?.id || "admin",
+    };
+
+    // Handle different material types
+    if (type === "pdf") {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "PDF file is required for pdf type",
+        });
+      }
+
+      materialData.fileUrl = `/uploads/materials/${req.file.filename}`;
+      materialData.fileName = req.file.originalname;
+    } else if (type === "video" || type === "link") {
+      if (!url) {
+        return res.status(400).json({
+          success: false,
+          message: "URL is required for video/link type",
+        });
+      }
+
+      materialData.url = url;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid type. Must be 'pdf', 'video', or 'link'",
+      });
+    }
+
+    const material = await StudyMaterial.create(materialData);
+
+    res.status(201).json({
+      success: true,
+      material,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to create study material",
+      error: error.message,
+    });
+  }
+};
+
+// @route   GET /api/study-materials
+// @desc    Get all study materials (with optional filters)
+// @access  Public
+exports.getAllStudyMaterials = async (req, res) => {
+  try {
+    const { department, type } = req.query;
+
+    const query = { visible: true };
+
+    if (department) {
+      query.department = department;
+    }
+
+    if (type) {
+      query.type = type;
+    }
+
+    const materials = await StudyMaterial.find(query)
+      .populate("createdBy", "firstName lastName")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      materials,
+      total: materials.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch study materials",
+      error: error.message,
+    });
+  }
+};
+
+// @route   DELETE /api/study-materials/:id
+// @desc    Delete study material
+// @access  Private (Admin only)
+exports.deleteStudyMaterial = async (req, res) => {
+  try {
+    const material = await StudyMaterial.findById(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Study material not found",
+      });
+    }
+
+    // Delete physical file if it exists
+    if (material.type === "pdf" && material.fileUrl) {
+      try {
+        const filePath = path.join(__dirname, "../..", material.fileUrl);
+        await fs.unlink(filePath);
+      } catch (error) {
+        console.error("Error deleting file:", error);
+        // Continue with database deletion even if file deletion fails
+      }
+    }
+
+    await StudyMaterial.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: "Study material deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete study material",
+      error: error.message,
+    });
+  }
+};
+
+// @route   PATCH /api/study-materials/:id/toggle-visibility
+// @desc    Toggle study material visibility
+// @access  Private (Admin only)
+exports.toggleVisibility = async (req, res) => {
+  try {
+    const material = await StudyMaterial.findById(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Study material not found",
+      });
+    }
+
+    material.visible = !material.visible;
+    await material.save();
+
+    res.json({
+      success: true,
+      material,
+      message: `Study material is now ${
+        material.visible ? "visible" : "hidden"
+      }`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to toggle visibility",
+      error: error.message,
+    });
+  }
+};
+
+// @route   POST /api/study-materials/:id/download
+// @desc    Track download count
+// @access  Public
+exports.trackDownload = async (req, res) => {
+  try {
+    const material = await StudyMaterial.findById(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Study material not found",
+      });
+    }
+
+    material.downloads += 1;
+    await material.save();
+
+    res.json({
+      success: true,
+      message: "Download tracked",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to track download",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = exports;

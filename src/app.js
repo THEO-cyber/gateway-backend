@@ -59,14 +59,17 @@ app.use("/api/papers", require("./routes/papers"));
 app.use("/api/qa", require("./routes/qa"));
 app.use("/api/ai", require("./routes/ai"));
 app.use("/api/admin", require("./routes/admin"));
-app.use("/api/content", require("./routes/content")); // Unified content route
-app.use("/api/departments", require("./routes/content")); // Backward compatibility
+app.use("/api/content", require("./routes/content")); // Unified content route (admin)
+app.use("/api/departments", require("./routes/departments")); // Public departments
 app.use("/api/courses", require("./routes/content")); // Backward compatibility
 app.use("/api/subjects", require("./routes/content")); // Backward compatibility
 app.use("/api/tags", require("./routes/content")); // Backward compatibility
 app.use("/api/announcements", require("./routes/announcements"));
 app.use("/api/analytics", require("./routes/analytics"));
 app.use("/api/settings", require("./routes/settings"));
+app.use("/api/tests", require("./routes/tests")); // Tests & quizzes
+app.use("/api/study-materials", require("./routes/studyMaterials")); // Study materials
+app.use("/api/students", require("./routes/students")); // Student profiles
 
 // Health check
 app.get("/health", (req, res) => {

@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const PastPaper = require("../models/PastPaper");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
@@ -16,7 +17,33 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const { email, password, firstName, lastName, department, yearOfStudy } =
+      req.body;
+
+    // Validate required fields
+    if (!email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide email, password, first name, and last name",
+      });
+    }
+
+    // Check if department is provided and has papers
+    if (department) {
+      const departmentHasPapers = await PastPaper.findOne({
+        department,
+        status: "approved",
+      });
+
+      if (!departmentHasPapers) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No papers available for this department yet. Please contact admin or choose another department.",
+          code: "NO_PAPERS_FOR_DEPARTMENT",
+        });
+      }
+    }
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -37,6 +64,8 @@ exports.register = async (req, res) => {
       password: hashedPassword,
       firstName,
       lastName,
+      department: department || null,
+      yearOfStudy: yearOfStudy || null,
     });
 
     // Generate token
@@ -52,6 +81,8 @@ exports.register = async (req, res) => {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
+          department: user.department,
+          yearOfStudy: user.yearOfStudy,
         },
         token,
       },

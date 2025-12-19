@@ -10,13 +10,11 @@ exports.getAllDepartments = async (req, res) => {
     const departments = await Department.find().sort({ name: 1 });
     res.json({ success: true, data: departments });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch departments",
-        code: "FETCH_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch departments",
+      code: "FETCH_ERROR",
+    });
   }
 };
 
@@ -34,21 +32,17 @@ exports.createDepartment = async (req, res) => {
       .json({ success: true, message: "Department created", data: department });
   } catch (error) {
     if (error.code === 11000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Department already exists",
-          code: "DUPLICATE_ERROR",
-        });
-    }
-    res
-      .status(500)
-      .json({
+      return res.status(400).json({
         success: false,
-        error: "Failed to create department",
-        code: "CREATE_ERROR",
+        error: "Department already exists",
+        code: "DUPLICATE_ERROR",
       });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to create department",
+      code: "CREATE_ERROR",
+    });
   }
 };
 
@@ -60,13 +54,11 @@ exports.updateDepartment = async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!department) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Department not found",
-          code: "NOT_FOUND",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Department not found",
+        code: "NOT_FOUND",
+      });
     }
     res.json({
       success: true,
@@ -74,13 +66,11 @@ exports.updateDepartment = async (req, res) => {
       data: department,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to update department",
-        code: "UPDATE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to update department",
+      code: "UPDATE_ERROR",
+    });
   }
 };
 
@@ -88,23 +78,19 @@ exports.deleteDepartment = async (req, res) => {
   try {
     const department = await Department.findByIdAndDelete(req.params.id);
     if (!department) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Department not found",
-          code: "NOT_FOUND",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Department not found",
+        code: "NOT_FOUND",
+      });
     }
     res.json({ success: true, message: "Department deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to delete department",
-        code: "DELETE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete department",
+      code: "DELETE_ERROR",
+    });
   }
 };
 
@@ -117,13 +103,11 @@ exports.getAllCourses = async (req, res) => {
       .sort({ name: 1 });
     res.json({ success: true, data: courses });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch courses",
-        code: "FETCH_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch courses",
+      code: "FETCH_ERROR",
+    });
   }
 };
 
@@ -143,21 +127,17 @@ exports.createCourse = async (req, res) => {
       .json({ success: true, message: "Course created", data: course });
   } catch (error) {
     if (error.code === 11000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Course already exists",
-          code: "DUPLICATE_ERROR",
-        });
-    }
-    res
-      .status(500)
-      .json({
+      return res.status(400).json({
         success: false,
-        error: "Failed to create course",
-        code: "CREATE_ERROR",
+        error: "Course already exists",
+        code: "DUPLICATE_ERROR",
       });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to create course",
+      code: "CREATE_ERROR",
+    });
   }
 };
 
@@ -174,13 +154,11 @@ exports.updateCourse = async (req, res) => {
     }
     res.json({ success: true, message: "Course updated", data: course });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to update course",
-        code: "UPDATE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to update course",
+      code: "UPDATE_ERROR",
+    });
   }
 };
 
@@ -194,13 +172,11 @@ exports.deleteCourse = async (req, res) => {
     }
     res.json({ success: true, message: "Course deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to delete course",
-        code: "DELETE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete course",
+      code: "DELETE_ERROR",
+    });
   }
 };
 
@@ -213,13 +189,11 @@ exports.getAllSubjects = async (req, res) => {
       .sort({ name: 1 });
     res.json({ success: true, data: subjects });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch subjects",
-        code: "FETCH_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch subjects",
+      code: "FETCH_ERROR",
+    });
   }
 };
 
@@ -238,21 +212,17 @@ exports.createSubject = async (req, res) => {
       .json({ success: true, message: "Subject created", data: subject });
   } catch (error) {
     if (error.code === 11000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Subject already exists",
-          code: "DUPLICATE_ERROR",
-        });
-    }
-    res
-      .status(500)
-      .json({
+      return res.status(400).json({
         success: false,
-        error: "Failed to create subject",
-        code: "CREATE_ERROR",
+        error: "Subject already exists",
+        code: "DUPLICATE_ERROR",
       });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to create subject",
+      code: "CREATE_ERROR",
+    });
   }
 };
 
@@ -263,23 +233,19 @@ exports.updateSubject = async (req, res) => {
       runValidators: true,
     }).populate("department", "name code");
     if (!subject) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Subject not found",
-          code: "NOT_FOUND",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Subject not found",
+        code: "NOT_FOUND",
+      });
     }
     res.json({ success: true, message: "Subject updated", data: subject });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to update subject",
-        code: "UPDATE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to update subject",
+      code: "UPDATE_ERROR",
+    });
   }
 };
 
@@ -287,23 +253,19 @@ exports.deleteSubject = async (req, res) => {
   try {
     const subject = await Subject.findByIdAndDelete(req.params.id);
     if (!subject) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Subject not found",
-          code: "NOT_FOUND",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Subject not found",
+        code: "NOT_FOUND",
+      });
     }
     res.json({ success: true, message: "Subject deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to delete subject",
-        code: "DELETE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete subject",
+      code: "DELETE_ERROR",
+    });
   }
 };
 
@@ -314,13 +276,11 @@ exports.getAllTags = async (req, res) => {
     const tags = await Tag.find().sort({ usageCount: -1, name: 1 });
     res.json({ success: true, data: tags });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch tags",
-        code: "FETCH_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch tags",
+      code: "FETCH_ERROR",
+    });
   }
 };
 
@@ -331,21 +291,17 @@ exports.createTag = async (req, res) => {
     res.status(201).json({ success: true, message: "Tag created", data: tag });
   } catch (error) {
     if (error.code === 11000) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Tag already exists",
-          code: "DUPLICATE_ERROR",
-        });
-    }
-    res
-      .status(500)
-      .json({
+      return res.status(400).json({
         success: false,
-        error: "Failed to create tag",
-        code: "CREATE_ERROR",
+        error: "Tag already exists",
+        code: "DUPLICATE_ERROR",
       });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to create tag",
+      code: "CREATE_ERROR",
+    });
   }
 };
 
@@ -359,13 +315,11 @@ exports.deleteTag = async (req, res) => {
     }
     res.json({ success: true, message: "Tag deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to delete tag",
-        code: "DELETE_ERROR",
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete tag",
+      code: "DELETE_ERROR",
+    });
   }
 };
 

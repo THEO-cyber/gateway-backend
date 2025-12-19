@@ -16,6 +16,7 @@ const {
 const { protect } = require("../middleware/auth");
 
 router.post("/register", register);
+router.post("/register/student", register); // Student app alias
 router.post("/login", login); // Generic login (returns role)
 router.post("/login/admin", loginAdmin); // Admin panel only
 router.post("/login/student", loginStudent); // Student app only

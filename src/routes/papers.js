@@ -11,6 +11,9 @@ const {
   rejectPaper,
   getPaperStats,
   bulkUploadPapers,
+  getDepartments,
+  getYearsByDepartment,
+  getTitlesByDepartmentAndYear,
 } = require("../controllers/paperController");
 const { protect } = require("../middleware/auth");
 const { isActiveUser, isAdmin } = require("../middleware/adminAuth");
@@ -23,6 +26,9 @@ router.use(isActiveUser);
 router.get("/", getPapers);
 router.post("/upload", upload.single("file"), uploadPaper);
 router.get("/search", searchPapers);
+router.get("/departments", getDepartments); // Get all departments
+router.get("/years/:department", getYearsByDepartment); // Get years by department
+router.get("/titles/:department/:year", getTitlesByDepartmentAndYear); // Get papers by dept & year
 router.get("/years/:course", getAvailableYears);
 router.get("/:id/download", downloadPaper);
 router.delete("/:id", deletePaper);
