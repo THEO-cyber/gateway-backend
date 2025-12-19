@@ -1,6 +1,12 @@
 const StudyMaterial = require("../models/StudyMaterial");
 const fs = require("fs").promises;
+const fsSync = require("fs");
 const path = require("path");
+const {
+  uploadFile: uploadToSupabase,
+  deleteFile: deleteFromSupabase,
+  isSupabaseConfigured,
+} = require("../services/supabaseStorage");
 
 // @route   POST /api/study-materials
 // @desc    Upload study material (PDF, video, or link)
@@ -33,7 +39,32 @@ exports.createStudyMaterial = async (req, res) => {
         });
       }
 
-      materialData.fileUrl = `/uploads/materials/${req.file.filename}`;
+      // Use Supabase if configured
+      if (isSupabaseConfigured()) {
+        try {
+          const fileBuffer = fsSync.readFileSync(req.file.path);
+          const { url, path: uploadPath } = await uploadToSupabase(
+            fileBuffer,
+            req.file.originalname,
+            "papers",
+            "materials"
+          );
+          materialData.fileUrl = url;
+          materialData.storagePath = uploadPath;
+
+          // Delete temp file
+          fsSync.unlinkSync(req.file.path);
+        } catch (uploadError) {
+          console.error(
+            "Supabase upload failed, using local storage:",
+            uploadError
+          );
+          materialData.fileUrl = `/uploads/materials/${req.file.filename}`;
+        }
+      } else {
+        materialData.fileUrl = `/uploads/materials/${req.file.filename}`;
+      }
+
       materialData.fileName = req.file.originalname;
     } else if (type === "video" || type === "link") {
       if (!url) {
@@ -118,8 +149,14 @@ exports.deleteStudyMaterial = async (req, res) => {
     // Delete physical file if it exists
     if (material.type === "pdf" && material.fileUrl) {
       try {
-        const filePath = path.join(__dirname, "../..", material.fileUrl);
-        await fs.unlink(filePath);
+        if (isSupabaseConfigured() && material.storagePath) {
+          // Delete from Supabase
+          await deleteFromSupabase(material.storagePath, "papers");
+        } else {
+          // Delete from local storage
+          const filePath = path.join(__dirname, "../..", material.fileUrl);
+          await fs.unlink(filePath);
+        }
       } catch (error) {
         console.error("Error deleting file:", error);
         // Continue with database deletion even if file deletion fails

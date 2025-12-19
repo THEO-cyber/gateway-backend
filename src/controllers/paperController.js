@@ -1,6 +1,11 @@
 const PastPaper = require("../models/PastPaper");
 const path = require("path");
 const fs = require("fs");
+const {
+  uploadFile: uploadToSupabase,
+  deleteFile: deleteFromSupabase,
+  isSupabaseConfigured,
+} = require("../services/supabaseStorage");
 
 // @route   GET /api/papers
 // @desc    Get all past papers with filters
@@ -66,10 +71,39 @@ exports.uploadPaper = async (req, res) => {
       });
     }
 
-    // Create file URL
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
-      req.file.filename
-    }`;
+    let fileUrl;
+    let storagePath;
+
+    // Use Supabase if configured, otherwise use local storage
+    if (isSupabaseConfigured()) {
+      try {
+        const fileBuffer = fs.readFileSync(req.file.path);
+        const { url, path: uploadPath } = await uploadToSupabase(
+          fileBuffer,
+          req.file.originalname,
+          "papers",
+          "papers"
+        );
+        fileUrl = url;
+        storagePath = uploadPath;
+
+        // Delete temp file after upload
+        fs.unlinkSync(req.file.path);
+      } catch (error) {
+        // Fallback to local storage if Supabase fails
+        console.error("Supabase upload failed, using local storage:", error);
+        fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
+          req.file.filename
+        }`;
+        storagePath = req.file.path;
+      }
+    } else {
+      // Use local storage
+      fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
+        req.file.filename
+      }`;
+      storagePath = req.file.path;
+    }
 
     const paper = await PastPaper.create({
       department,
@@ -79,6 +113,7 @@ exports.uploadPaper = async (req, res) => {
       fileUrl,
       fileSize: req.file.size,
       uploadedBy: req.user._id,
+      storagePath, // Store path for deletion
     });
 
     res.status(201).json({
@@ -178,13 +213,19 @@ exports.deletePaper = async (req, res) => {
     }
 
     // Delete file from storage
-    const filePath = path.join(
-      __dirname,
-      "../../uploads/papers",
-      path.basename(paper.fileUrl)
-    );
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (isSupabaseConfigured() && paper.storagePath) {
+      // Delete from Supabase
+      await deleteFromSupabase(paper.storagePath, "papers");
+    } else {
+      // Delete from local storage
+      const filePath = path.join(
+        __dirname,
+        "../../uploads/papers",
+        path.basename(paper.fileUrl)
+      );
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
 
     await paper.deleteOne();
@@ -380,9 +421,41 @@ exports.bulkUploadPapers = async (req, res) => {
     // Process each uploaded file
     for (const file of req.files) {
       try {
-        const fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
-          file.filename
-        }`;
+        let fileUrl;
+        let storagePath;
+
+        // Use Supabase if configured
+        if (isSupabaseConfigured()) {
+          try {
+            const fileBuffer = fs.readFileSync(file.path);
+            const { url, path: uploadPath } = await uploadToSupabase(
+              fileBuffer,
+              file.originalname,
+              "papers",
+              "papers"
+            );
+            fileUrl = url;
+            storagePath = uploadPath;
+
+            // Delete temp file
+            fs.unlinkSync(file.path);
+          } catch (uploadError) {
+            // Fallback to local storage
+            console.error(
+              "Supabase upload failed, using local storage:",
+              uploadError
+            );
+            fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
+              file.filename
+            }`;
+            storagePath = file.path;
+          }
+        } else {
+          fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
+            file.filename
+          }`;
+          storagePath = file.path;
+        }
 
         const paper = await PastPaper.create({
           course: title, // Using title as course name
@@ -393,6 +466,7 @@ exports.bulkUploadPapers = async (req, res) => {
           fileUrl,
           fileSize: file.size,
           uploadedBy: req.user._id,
+          storagePath,
         });
 
         uploadedPapers.push(paper);
