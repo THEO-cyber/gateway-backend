@@ -175,10 +175,14 @@ exports.deleteAnnouncement = async (req, res) => {
       message: "Announcement deleted successfully",
     });
   } catch (error) {
+    console.error("Delete announcement error:", error);
     res.status(500).json({
       success: false,
       error: "Failed to delete announcement",
       code: "DELETE_ERROR",
+      details: error.message,
+      stack: error.stack,
+      params: req.params,
     });
   }
 };
