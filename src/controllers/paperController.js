@@ -92,6 +92,9 @@ exports.uploadPaper = async (req, res) => {
       } catch (error) {
         // Fallback to local storage if Supabase fails
         console.error("Supabase upload failed, using local storage:", error);
+        if (error && error.stack) {
+          console.error("Supabase error stack:", error.stack);
+        }
         fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
           req.file.filename
         }`;
@@ -445,6 +448,9 @@ exports.bulkUploadPapers = async (req, res) => {
               "Supabase upload failed, using local storage:",
               uploadError
             );
+            if (uploadError && uploadError.stack) {
+              console.error("Supabase error stack:", uploadError.stack);
+            }
             fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
               file.filename
             }`;

@@ -7,6 +7,7 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 
 const app = express();
+app.set("trust proxy", 1); // Fix for rate-limit warning
 
 // Security middleware
 app.use(helmet());
