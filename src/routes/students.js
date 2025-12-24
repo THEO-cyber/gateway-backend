@@ -35,16 +35,27 @@ router.get("/profile", async (req, res) => {
       studentEmail: email,
     });
 
+    // Compose username (firstName + lastName)
+    const username = `${user.firstName || ""}${
+      user.lastName ? " " + user.lastName : ""
+    }`.trim();
+
+    // Find saved papers (if you have a savedPapers field or collection, otherwise return empty array)
+    let savedPapers = [];
+    // Example: If you have a SavedPaper model or a field in User, fetch here. Otherwise, leave as empty array.
+
     res.json({
       success: true,
       data: {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        username,
         department: user.department,
         yearOfStudy: user.yearOfStudy,
         enrolledTests,
         completedTests,
+        savedPapers,
         createdAt: user.createdAt,
       },
     });

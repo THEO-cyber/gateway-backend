@@ -5,20 +5,26 @@ const Announcement = require("../models/Announcement");
 // @access  Public
 exports.getAllAnnouncements = async (req, res) => {
   try {
-    const { category, isActive, page = 1, limit = 20 } = req.query;
+    const { category, isActive, department, page = 1, limit = 20 } = req.query;
 
     const query = {};
     if (category) query.category = category;
     if (isActive !== undefined) query.isActive = isActive === "true";
 
+    // Department filter: show 'all' or matching department
+    if (department && department !== "all") {
+      query.$or = [{ department: department }, { department: "all" }];
+    }
+
     // Check if expired
     const now = new Date();
     if (isActive === "true") {
-      query.$or = [
+      query.$or = query.$or || [];
+      query.$or.push(
         { expiresAt: { $exists: false } },
         { expiresAt: null },
-        { expiresAt: { $gt: now } },
-      ];
+        { expiresAt: { $gt: now } }
+      );
     }
 
     const announcements = await Announcement.find(query)

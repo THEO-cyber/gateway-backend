@@ -17,7 +17,7 @@ if (!fs.existsSync(uploadPath)) {
 connectDB();
 
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   logger.info(
     `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`
   );
