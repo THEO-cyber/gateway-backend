@@ -64,12 +64,14 @@ exports.getAllTests = async (req, res) => {
 
     res.json({
       success: true,
-      tests,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit)),
+      data: {
+        tests,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit)),
+        },
       },
     });
   } catch (error) {
