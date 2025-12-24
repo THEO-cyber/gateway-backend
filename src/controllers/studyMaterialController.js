@@ -27,7 +27,7 @@ exports.createStudyMaterial = async (req, res) => {
       type,
       department,
       description,
-      createdBy: req.user?.id || "admin",
+      uploadedBy: req.user?._id || req.user?.id || "admin",
     };
 
     // Handle different material types
@@ -46,7 +46,7 @@ exports.createStudyMaterial = async (req, res) => {
           const { url, path: uploadPath } = await uploadToSupabase(
             fileBuffer,
             req.file.originalname,
-            "papers",
+            process.env.SUPABASE_BUCKET,
             "materials"
           );
           materialData.fileUrl = url;
@@ -89,6 +89,7 @@ exports.createStudyMaterial = async (req, res) => {
       material,
     });
   } catch (error) {
+    console.error("Upload error:", error); // Log full error stack
     res.status(500).json({
       success: false,
       message: "Failed to create study material",

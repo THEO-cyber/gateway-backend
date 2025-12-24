@@ -81,7 +81,7 @@ exports.uploadPaper = async (req, res) => {
         const { url, path: uploadPath } = await uploadToSupabase(
           fileBuffer,
           req.file.originalname,
-          "papers",
+          process.env.SUPABASE_BUCKET,
           "papers"
         );
         fileUrl = url;
