@@ -5,6 +5,19 @@ const fs = require("fs");
 // Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // Debug: log incoming request and file info
+    console.log("[MULTER][DEBUG] --- FILE UPLOAD ATTEMPT ---");
+    console.log(
+      `[MULTER][DEBUG] Request path: ${req.path}, method: ${req.method}`
+    );
+    console.log(
+      `[MULTER][DEBUG] Incoming fieldname: '${file.fieldname}', originalname: '${file.originalname}', mimetype: '${file.mimetype}'`
+    );
+    if (req.body && Object.keys(req.body).length > 0) {
+      console.log("[MULTER][DEBUG] Other form fields:", req.body);
+    } else {
+      console.log("[MULTER][DEBUG] No other form fields detected.");
+    }
     // Determine folder based on route or field name
     let folder = "papers"; // default
 
@@ -33,6 +46,10 @@ const storage = multer.diskStorage({
 
 // File filter - only PDFs
 const fileFilter = (req, file, cb) => {
+  // Debug: log fileFilter check
+  console.log(
+    `[MULTER][DEBUG] fileFilter: fieldname='${file.fieldname}', mimetype='${file.mimetype}'`
+  );
   if (file.mimetype === "application/pdf") {
     cb(null, true);
   } else {

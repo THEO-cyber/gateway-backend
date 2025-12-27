@@ -1,3 +1,30 @@
+// @route   POST /api/study-materials/:id/download
+// @desc    Track a download for a study material
+// @access  Public or Private (as needed)
+exports.trackDownload = async (req, res) => {
+  try {
+    const material = await StudyMaterial.findById(req.params.id);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: "Study material not found",
+      });
+    }
+    material.downloads = (material.downloads || 0) + 1;
+    await material.save();
+    res.json({
+      success: true,
+      message: "Download tracked",
+      downloads: material.downloads,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to track download",
+      error: error.message,
+    });
+  }
+};
 const StudyMaterial = require("../models/StudyMaterial");
 const fs = require("fs").promises;
 const fsSync = require("fs");
@@ -116,7 +143,7 @@ exports.getAllStudyMaterials = async (req, res) => {
     }
 
     const materials = await StudyMaterial.find(query)
-      .populate("createdBy", "firstName lastName")
+      .populate("uploadedBy", "email firstName lastName")
       .sort({ createdAt: -1 });
 
     res.json({
@@ -125,10 +152,12 @@ exports.getAllStudyMaterials = async (req, res) => {
       total: materials.length,
     });
   } catch (error) {
+    console.error("getAllStudyMaterials error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch study materials",
       error: error.message,
+      stack: error.stack,
     });
   }
 };
@@ -151,8 +180,11 @@ exports.deleteStudyMaterial = async (req, res) => {
     if (material.type === "pdf" && material.fileUrl) {
       try {
         if (isSupabaseConfigured() && material.storagePath) {
-          // Delete from Supabase
-          await deleteFromSupabase(material.storagePath, "papers");
+          // Delete from Supabase (use correct bucket)
+          await deleteFromSupabase(
+            material.storagePath,
+            process.env.SUPABASE_BUCKET
+          );
         } else {
           // Delete from local storage
           const filePath = path.join(__dirname, "../..", material.fileUrl);
@@ -211,35 +243,3 @@ exports.toggleVisibility = async (req, res) => {
     });
   }
 };
-
-// @route   POST /api/study-materials/:id/download
-// @desc    Track download count
-// @access  Public
-exports.trackDownload = async (req, res) => {
-  try {
-    const material = await StudyMaterial.findById(req.params.id);
-
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: "Study material not found",
-      });
-    }
-
-    material.downloads += 1;
-    await material.save();
-
-    res.json({
-      success: true,
-      message: "Download tracked",
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to track download",
-      error: error.message,
-    });
-  }
-};
-
-module.exports = exports;

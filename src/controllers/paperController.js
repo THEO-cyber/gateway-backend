@@ -40,6 +40,19 @@ exports.getPapers = async (req, res) => {
       },
     });
   } catch (error) {
+    // Detailed error logging
+    console.error("[getPapers] Error:", error);
+    if (error && error.stack) {
+      console.error("[getPapers] Stack:", error.stack);
+    }
+    console.error("[getPapers] Request query:", req.query);
+    if (req.user) {
+      console.error(
+        "[getPapers] User:",
+        req.user._id,
+        req.user.email || req.user.username || ""
+      );
+    }
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -56,7 +69,10 @@ exports.uploadPaper = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "Please upload a PDF file",
+        message:
+          "Please upload a PDF file. The field name must be 'file'. If you see a MulterError: Unexpected field, check that your form-data key is 'file'.",
+        hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
+        receivedFields: Object.keys(req.body),
       });
     }
 
@@ -91,9 +107,28 @@ exports.uploadPaper = async (req, res) => {
         fs.unlinkSync(req.file.path);
       } catch (error) {
         // Fallback to local storage if Supabase fails
-        console.error("Supabase upload failed, using local storage:", error);
+        console.error(
+          "[uploadPaper] Supabase upload failed, using local storage:",
+          error
+        );
         if (error && error.stack) {
-          console.error("Supabase error stack:", error.stack);
+          console.error("[uploadPaper] Supabase error stack:", error.stack);
+        }
+        console.error("[uploadPaper] Request body:", req.body);
+        if (req.file) {
+          console.error("[uploadPaper] File info:", {
+            originalname: req.file.originalname,
+            filename: req.file.filename,
+            size: req.file.size,
+            path: req.file.path,
+          });
+        }
+        if (req.user) {
+          console.error(
+            "[uploadPaper] User:",
+            req.user._id,
+            req.user.email || req.user.username || ""
+          );
         }
         fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
           req.file.filename
@@ -127,7 +162,47 @@ exports.uploadPaper = async (req, res) => {
   } catch (error) {
     // Delete uploaded file on error
     if (req.file) {
-      fs.unlinkSync(req.file.path);
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupErr) {
+        console.error("[uploadPaper] Error cleaning up file:", cleanupErr);
+      }
+    }
+    // Detailed error logging
+    if (
+      error &&
+      error.name === "MulterError" &&
+      error.code === "LIMIT_UNEXPECTED_FILE"
+    ) {
+      res.status(400).json({
+        success: false,
+        message:
+          "MulterError: Unexpected field. The file field name must be 'file'.",
+        hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
+        receivedFields: Object.keys(req.body),
+        stack: error.stack,
+      });
+      return;
+    }
+    console.error("[uploadPaper] Error:", error);
+    if (error && error.stack) {
+      console.error("[uploadPaper] Stack:", error.stack);
+    }
+    console.error("[uploadPaper] Request body:", req.body);
+    if (req.file) {
+      console.error("[uploadPaper] File info:", {
+        originalname: req.file.originalname,
+        filename: req.file.filename,
+        size: req.file.size,
+        path: req.file.path,
+      });
+    }
+    if (req.user) {
+      console.error(
+        "[uploadPaper] User:",
+        req.user._id,
+        req.user.email || req.user.username || ""
+      );
     }
     res.status(500).json({
       success: false,
@@ -216,18 +291,39 @@ exports.deletePaper = async (req, res) => {
     }
 
     // Delete file from storage
-    if (isSupabaseConfigured() && paper.storagePath) {
-      // Delete from Supabase
-      await deleteFromSupabase(paper.storagePath, "papers");
-    } else {
-      // Delete from local storage
-      const filePath = path.join(
-        __dirname,
-        "../../uploads/papers",
-        path.basename(paper.fileUrl)
+    try {
+      if (isSupabaseConfigured() && paper.storagePath) {
+        // Delete from Supabase (use correct bucket)
+        await deleteFromSupabase(
+          paper.storagePath,
+          process.env.SUPABASE_BUCKET
+        );
+      } else {
+        // Delete from local storage
+        const filePath = path.join(
+          __dirname,
+          "../../uploads/papers",
+          path.basename(paper.fileUrl)
+        );
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    } catch (storageError) {
+      console.error(
+        "[deletePaper] Error deleting file from storage:",
+        storageError
       );
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+      if (storageError && storageError.stack) {
+        console.error("[deletePaper] Storage error stack:", storageError.stack);
+      }
+      console.error("[deletePaper] Paper info:", paper);
+      if (req.user) {
+        console.error(
+          "[deletePaper] User:",
+          req.user._id,
+          req.user.email || req.user.username || ""
+        );
       }
     }
 
@@ -238,6 +334,19 @@ exports.deletePaper = async (req, res) => {
       message: "Paper deleted successfully",
     });
   } catch (error) {
+    // Detailed error logging
+    console.error("[deletePaper] Error:", error);
+    if (error && error.stack) {
+      console.error("[deletePaper] Stack:", error.stack);
+    }
+    console.error("[deletePaper] Request params:", req.params);
+    if (req.user) {
+      console.error(
+        "[deletePaper] User:",
+        req.user._id,
+        req.user.email || req.user.username || ""
+      );
+    }
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -411,7 +520,16 @@ exports.bulkUploadPapers = async (req, res) => {
 
     if (!title || !department || !year) {
       // Delete uploaded files if validation fails
-      req.files.forEach((file) => fs.unlinkSync(file.path));
+      req.files.forEach((file) => {
+        try {
+          fs.unlinkSync(file.path);
+        } catch (cleanupErr) {
+          console.error(
+            "[bulkUploadPapers] Error cleaning up file:",
+            cleanupErr
+          );
+        }
+      });
       return res.status(400).json({
         success: false,
         message: "Title, department, and year are required",
@@ -434,7 +552,7 @@ exports.bulkUploadPapers = async (req, res) => {
             const { url, path: uploadPath } = await uploadToSupabase(
               fileBuffer,
               file.originalname,
-              "papers",
+              process.env.SUPABASE_BUCKET,
               "papers"
             );
             fileUrl = url;
@@ -445,11 +563,27 @@ exports.bulkUploadPapers = async (req, res) => {
           } catch (uploadError) {
             // Fallback to local storage
             console.error(
-              "Supabase upload failed, using local storage:",
+              "[bulkUploadPapers] Supabase upload failed, using local storage:",
               uploadError
             );
             if (uploadError && uploadError.stack) {
-              console.error("Supabase error stack:", uploadError.stack);
+              console.error(
+                "[bulkUploadPapers] Supabase error stack:",
+                uploadError.stack
+              );
+            }
+            console.error("[bulkUploadPapers] File info:", {
+              originalname: file.originalname,
+              filename: file.filename,
+              size: file.size,
+              path: file.path,
+            });
+            if (req.user) {
+              console.error(
+                "[bulkUploadPapers] User:",
+                req.user._id,
+                req.user.email || req.user.username || ""
+              );
             }
             fileUrl = `${req.protocol}://${req.get("host")}/uploads/papers/${
               file.filename
@@ -477,6 +611,23 @@ exports.bulkUploadPapers = async (req, res) => {
 
         uploadedPapers.push(paper);
       } catch (error) {
+        // Detailed per-file error logging
+        console.error(
+          "[bulkUploadPapers] Error uploading file:",
+          file.originalname,
+          error
+        );
+        if (error && error.stack) {
+          console.error("[bulkUploadPapers] Stack:", error.stack);
+        }
+        console.error("[bulkUploadPapers] File info:", file);
+        if (req.user) {
+          console.error(
+            "[bulkUploadPapers] User:",
+            req.user._id,
+            req.user.email || req.user.username || ""
+          );
+        }
         errors.push({
           fileName: file.originalname,
           error: error.message,
@@ -503,14 +654,38 @@ exports.bulkUploadPapers = async (req, res) => {
     });
   } catch (error) {
     // Delete uploaded files on error
-    if (req.files) {
-      req.files.forEach((file) => {
-        try {
-          fs.unlinkSync(file.path);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
+    if (!req.file) {
+      // Extra error details for Multer errors
+      console.error("[UPLOAD ERROR] Multer file missing.");
+      console.error(`[UPLOAD ERROR] Request method: ${req.method}, path: ${req.path}`);
+      console.error("[UPLOAD ERROR] Headers:", req.headers);
+      if (req.body && Object.keys(req.body).length > 0) {
+        console.error("[UPLOAD ERROR] Form fields:", Object.keys(req.body));
+      } else {
+        console.error("[UPLOAD ERROR] No form fields detected.");
+      }
+      return res.status(400).json({
+        success: false,
+        message: "Please upload a PDF file. The field name must be 'file'. If you see a MulterError: Unexpected field, check that your form-data key is 'file'.",
+        hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
+        receivedFields: Object.keys(req.body),
+        method: req.method,
+        path: req.path,
+        headers: req.headers,
       });
+    }
+    // Detailed error logging
+    console.error("[bulkUploadPapers] Error:", error);
+    if (error && error.stack) {
+      console.error("[bulkUploadPapers] Stack:", error.stack);
+    }
+    console.error("[bulkUploadPapers] Request body:", req.body);
+    if (req.user) {
+      console.error(
+        "[bulkUploadPapers] User:",
+        req.user._id,
+        req.user.email || req.user.username || ""
+      );
     }
     res.status(500).json({
       success: false,
@@ -518,7 +693,7 @@ exports.bulkUploadPapers = async (req, res) => {
       error: error.message,
     });
   }
-};
+}
 
 // @route   GET /api/papers/departments
 // @desc    Get all departments with papers
@@ -529,27 +704,19 @@ exports.getDepartments = async (req, res) => {
       { $match: { status: "approved" } },
       { $group: { _id: "$department", count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
-      {
-        $project: {
-          _id: 0,
-          department: "$_id",
-          paperCount: "$count",
-        },
-      },
     ]);
-
-    res.json({
+    res.status(200).json({
       success: true,
-      data: departments,
+      departments,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch departments",
+      message: "Failed to get departments",
       error: error.message,
     });
   }
-};
+}
 
 // @route   GET /api/papers/years/:department
 // @desc    Get available years for a department
