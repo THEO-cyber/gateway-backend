@@ -26,7 +26,10 @@ const {
 } = require("../controllers/adminController");
 const { protect } = require("../middleware/auth");
 const { isAdmin } = require("../middleware/adminAuth");
-const { bulkUploadPapers } = require("../controllers/paperController");
+const {
+  bulkUploadPapers,
+  deletePaper,
+} = require("../controllers/paperController");
 const upload = require("../middleware/upload");
 
 // All admin routes require authentication and admin role
@@ -68,5 +71,7 @@ router.get("/reports/active-users", getActiveUsers);
 
 // Paper upload (multiple files)
 router.post("/papers/upload", upload.array("papers", 10), bulkUploadPapers);
+// Paper delete (single file)
+router.delete("/papers/:id", deletePaper);
 
 module.exports = router;

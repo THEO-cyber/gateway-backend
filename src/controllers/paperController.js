@@ -657,7 +657,9 @@ exports.bulkUploadPapers = async (req, res) => {
     if (!req.file) {
       // Extra error details for Multer errors
       console.error("[UPLOAD ERROR] Multer file missing.");
-      console.error(`[UPLOAD ERROR] Request method: ${req.method}, path: ${req.path}`);
+      console.error(
+        `[UPLOAD ERROR] Request method: ${req.method}, path: ${req.path}`
+      );
       console.error("[UPLOAD ERROR] Headers:", req.headers);
       if (req.body && Object.keys(req.body).length > 0) {
         console.error("[UPLOAD ERROR] Form fields:", Object.keys(req.body));
@@ -666,7 +668,8 @@ exports.bulkUploadPapers = async (req, res) => {
       }
       return res.status(400).json({
         success: false,
-        message: "Please upload a PDF file. The field name must be 'file'. If you see a MulterError: Unexpected field, check that your form-data key is 'file'.",
+        message:
+          "Please upload a PDF file. The field name must be 'file'. If you see a MulterError: Unexpected field, check that your form-data key is 'file'.",
         hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
         receivedFields: Object.keys(req.body),
         method: req.method,
@@ -693,7 +696,7 @@ exports.bulkUploadPapers = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 // @route   GET /api/papers/departments
 // @desc    Get all departments with papers
@@ -716,7 +719,7 @@ exports.getDepartments = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 // @route   GET /api/papers/years/:department
 // @desc    Get available years for a department
