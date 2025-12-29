@@ -11,9 +11,9 @@ exports.getAllAnnouncements = async (req, res) => {
     if (category) query.category = category;
     if (isActive !== undefined) query.isActive = isActive === "true";
 
-    // Department filter: show 'all' or matching department
+    // Department filter: always show 'all' announcements, plus specialty if specified
     if (department && department !== "all") {
-      query.$or = [{ department: department }, { department: "all" }];
+      query.$or = [{ department: "all" }, { department: department }];
     }
 
     // Check if expired
