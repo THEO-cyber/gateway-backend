@@ -153,10 +153,24 @@ exports.updateAnnouncement = async (req, res) => {
       data: announcement,
     });
   } catch (error) {
+    console.error("Update announcement error:", error, {
+      params: req.params,
+      body: req.body,
+      headers: req.headers,
+      method: req.method,
+      url: req.originalUrl,
+    });
     res.status(500).json({
       success: false,
       error: "Failed to update announcement",
       code: "UPDATE_ERROR",
+      message: error.message,
+      stack: error.stack,
+      params: req.params,
+      body: req.body,
+      headers: req.headers,
+      method: req.method,
+      url: req.originalUrl,
     });
   }
 };

@@ -324,6 +324,20 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
+    // Check for cooldown
+    if (user.resetPasswordCooldown && user.resetPasswordCooldown > Date.now()) {
+      const waitMins = Math.ceil(
+        (user.resetPasswordCooldown - Date.now()) / 60000
+      );
+      return res.status(429).json({
+        success: false,
+        message: `Too many attempts. Please try again in ${waitMins} minute(s).`,
+      });
+    }
+
+    // Reset attempts on new request
+    user.resetPasswordAttempts = 0;
+
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -332,11 +346,11 @@ exports.forgotPassword = async (req, res) => {
       .createHash("sha256")
       .update(otp)
       .digest("hex");
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    user.resetPasswordExpire = Date.now() + 1 * 60 * 1000; // 1 minute
     await user.save();
 
     // Send email
-    const message = `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 10 minutes.\n\nIf you didn't request this, please ignore this email.`;
+    const message = `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 1 minute.\n\nIf you didn't request this, please ignore this email.`;
 
     try {
       await sendEmail({
@@ -354,16 +368,21 @@ exports.forgotPassword = async (req, res) => {
       user.resetPasswordExpire = undefined;
       await user.save();
 
+      console.error("Forgot password email error:", error);
       res.status(500).json({
         success: false,
         message: "Email could not be sent",
+        error: error.message,
+        stack: error.stack,
       });
     }
   } catch (error) {
+    console.error("Forgot password server error:", error);
     res.status(500).json({
       success: false,
       message: "Server error",
       error: error.message,
+      stack: error.stack,
     });
   }
 };
@@ -378,18 +397,57 @@ exports.verifyOTP = async (req, res) => {
     // Hash OTP
     const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
 
-    const user = await User.findOne({
-      email,
-      resetPasswordOTP: hashedOTP,
-      resetPasswordExpire: { $gt: Date.now() },
-    });
-
-    if (!user) {
+    const user = await User.findOne({ email });
+    if (!user || !user.resetPasswordOTP || !user.resetPasswordExpire) {
       return res.status(400).json({
         success: false,
         message: "Invalid or expired OTP",
       });
     }
+
+    // Check if OTP expired
+    if (user.resetPasswordExpire < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired. Please request a new one.",
+      });
+    }
+
+    // Check attempts
+    if (user.resetPasswordAttempts >= 3) {
+      user.resetPasswordCooldown = Date.now() + 30 * 60 * 1000; // 30 min cooldown
+      await user.save();
+      // Send lockout email
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Password Reset Locked - HND Gateway",
+          text: `You have entered an incorrect OTP 3 times. You can request another OTP after 30 minutes. If this wasn't you, please contact support.`,
+        });
+      } catch (e) {
+        console.error("Failed to send lockout email:", e);
+      }
+      return res.status(429).json({
+        success: false,
+        message: "Too many invalid attempts. Please try again in 30 minutes.",
+      });
+    }
+
+    // Check OTP
+    if (user.resetPasswordOTP !== hashedOTP) {
+      user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+      await user.save();
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP.",
+        attempts: user.resetPasswordAttempts,
+      });
+    }
+
+    // Success: reset attempts and cooldown
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordCooldown = undefined;
+    await user.save();
 
     res.json({
       success: true,
