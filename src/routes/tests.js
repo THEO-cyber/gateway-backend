@@ -28,6 +28,10 @@ router.post("/", protect, isAdmin, createTest);
 router.get("/", getAllTests);
 router.get("/enrolled", getEnrolledTests); // Student's enrolled tests
 router.get("/results", getStudentResults); // Must come before /:id
+router.get(
+  "/:id/result-detail",
+  require("../controllers/enrollmentController").getResultDetail
+);
 router.get("/:id", getTestById);
 router.put("/:id", protect, isAdmin, updateTest);
 router.delete("/:id", protect, isAdmin, deleteTest);

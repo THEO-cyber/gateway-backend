@@ -1,3 +1,82 @@
+// @route   GET /api/tests/:id/result-detail
+// @desc    Get detailed question results for a test and user
+// @access  Public
+exports.getResultDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.query;
+    if (!id || id === "" || id === "result-detail") {
+      return res.status(400).json({
+        success: false,
+        message: `A valid testId must be provided in the URL (e.g. /api/tests/{testId}/result-detail). Received id: '${id}'`,
+        debug: { id, email },
+      });
+    }
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Student email is required in the query string (e.g. ?email=your_email)",
+        debug: { id, email },
+      });
+    }
+    // Find the submission
+    const submission = await Submission.findOne({
+      testId: id,
+      studentEmail: email,
+    });
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: `Submission not found for testId '${id}' and email '${email}'.`,
+        debug: { id, email },
+      });
+    }
+    // Find the test to get questions
+    const test = await Test.findById(id);
+    if (!test) {
+      return res.status(404).json({
+        success: false,
+        message: `Test not found for testId '${id}'.`,
+        debug: { id, email },
+      });
+    }
+    // Build detailed results
+    const details = test.questions.map((q, idx) => {
+      const userAnswer = submission.answers.find(
+        (a) => a.questionIndex === idx
+      );
+      return {
+        questionIndex: idx,
+        question: q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        selectedAnswer: userAnswer ? userAnswer.selectedAnswer : null,
+        isCorrect: userAnswer
+          ? userAnswer.selectedAnswer === q.correctAnswer
+          : false,
+      };
+    });
+    res.json({
+      success: true,
+      details,
+      debug: {
+        id,
+        email,
+        questionCount: test.questions.length,
+        answerCount: submission.answers.length,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message.includes("Cast to ObjectId")
+        ? "Invalid testId format. Please provide a valid testId in the URL."
+        : "Failed to fetch result detail",
+      error: error.message,
+    });
+  }
+};
 const Test = require("../models/Test");
 const Enrollment = require("../models/Enrollment");
 const Submission = require("../models/Submission");
@@ -247,17 +326,17 @@ exports.releaseResults = async (req, res) => {
       });
     }
 
-    // Check 7-day rule
+    // Check 15-minute rule
     const completedAt = test.completedAt || test.createdAt;
-    const daysSinceCompletion =
-      (new Date() - new Date(completedAt)) / (1000 * 60 * 60 * 24);
+    const minutesSinceCompletion =
+      (new Date() - new Date(completedAt)) / (1000 * 60);
 
-    if (daysSinceCompletion < 7) {
+    if (minutesSinceCompletion < 15) {
       return res.status(400).json({
         success: false,
-        message: `Results can only be released 7 days after test completion. ${Math.ceil(
-          7 - daysSinceCompletion
-        )} days remaining.`,
+        message: `Results can only be released 15 minutes after test completion. ${Math.ceil(
+          15 - minutesSinceCompletion
+        )} minute(s) remaining.`,
       });
     }
 
@@ -345,12 +424,19 @@ exports.getStudentResults = async (req, res) => {
       });
     }
 
+    // Debug logging
+    console.log("[getStudentResults] Query:", {
+      studentEmail: email,
+    });
     const results = await Submission.find({
       studentEmail: email,
-      resultsReleased: true,
     })
       .populate("testId", "title department")
       .sort({ submittedAt: -1 });
+
+    console.log(
+      `[getStudentResults] Found ${results.length} result(s) for email: ${email}`
+    );
 
     const formattedResults = results.map((r) => ({
       testId: r.testId._id,
@@ -366,6 +452,10 @@ exports.getStudentResults = async (req, res) => {
     res.json({
       success: true,
       results: formattedResults,
+      debug: {
+        query: { studentEmail: email, resultsReleased: true },
+        found: results.length,
+      },
     });
   } catch (error) {
     res.status(500).json({

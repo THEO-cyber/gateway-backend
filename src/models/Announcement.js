@@ -27,7 +27,6 @@ const announcementSchema = new mongoose.Schema({
   },
   targetAudience: {
     type: String,
-    enum: ["all", "students", "admins"],
     default: "all",
   },
   isActive: {
