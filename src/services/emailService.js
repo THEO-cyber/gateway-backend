@@ -1,29 +1,22 @@
-const nodemailer = require("nodemailer");
+// Resend-based email service for HND Gateway
+const { Resend } = require("resend");
 const logger = require("../utils/logger");
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 const sendEmail = async (options) => {
-  // Create transporter
-  const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-
-  // Define email options
-  const mailOptions = {
-    from: `HND Gateway <${process.env.EMAIL_USER}>`,
-    to: options.to,
-    subject: options.subject,
-    text: options.text,
-    html: options.html,
-  };
-
-  // Send email
   try {
-    await transporter.sendMail(mailOptions);
-    logger.info(`Email sent to ${options.to}`);
+    const data = await resend.emails.send({
+      from: options.from || `HND Gateway <noreply@hndgateway.online>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html || undefined,
+      text: options.text || undefined,
+    });
+    logger.info(
+      `Email sent to ${options.to}. Resend response: ${JSON.stringify(data)}`
+    );
+    return data;
   } catch (error) {
     logger.error(`Email send error: ${error.message}`);
     throw error;

@@ -9,6 +9,9 @@ const path = require("path");
 const app = express();
 app.set("trust proxy", 1); // Fix for rate-limit warning
 
+// Test email route (Resend integration)
+app.use("/api/test-email", require("./routes/testEmail"));
+
 // Security middleware
 app.use(helmet());
 app.use(compression());
