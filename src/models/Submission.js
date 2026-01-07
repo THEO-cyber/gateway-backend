@@ -19,6 +19,7 @@ const submissionSchema = new mongoose.Schema({
   },
   answers: [
     {
+      questionId: String,
       questionIndex: Number,
       selectedAnswer: String,
     },

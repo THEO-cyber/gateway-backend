@@ -41,32 +41,35 @@ exports.getResultDetail = async (req, res) => {
         debug: { id, email },
       });
     }
-    // Build detailed results (match by questionId: q0, q1, ...)
-    const details = test.questions.map((q, idx) => {
-      const questionId = `q${idx}`;
-      const userAnswer = submission.answers.find(
-        (a) => a.questionId === questionId
+    // Build detailed results for each question
+    const details = test.questions.map((question, index) => {
+      const questionId = `q${index}`;
+      // Match user's answer by questionId, fallback to index
+      let userAnswer = submission.answers.find(
+        (ans) => ans.questionId && ans.questionId.trim() === questionId
       );
+      if (!userAnswer && submission.answers[index]) {
+        userAnswer = submission.answers[index];
+      }
       return {
-        questionIndex: idx,
-        question: q.question,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
+        questionIndex: index,
+        question: question.question,
+        options: question.options,
+        correctAnswer: question.correctAnswer,
         selectedAnswer: userAnswer ? userAnswer.selectedAnswer : null,
-        isCorrect: userAnswer
-          ? userAnswer.selectedAnswer === q.correctAnswer
-          : false,
+        isCorrect:
+          userAnswer && userAnswer.selectedAnswer === question.correctAnswer,
       };
     });
-    res.json({
+
+    // Professional response, no debug info
+    return res.status(200).json({
       success: true,
+      testId: id,
+      studentEmail: email,
+      questionCount: test.questions.length,
+      answerCount: submission.answers.length,
       details,
-      debug: {
-        id,
-        email,
-        questionCount: test.questions.length,
-        answerCount: submission.answers.length,
-      },
     });
   } catch (error) {
     res.status(500).json({
@@ -196,16 +199,32 @@ exports.submitTest = async (req, res) => {
       });
     }
 
-    // Calculate score
+    // Store answers exactly as sent by frontend, no remapping
+    const answersToSave = Array.isArray(answers) ? answers : [];
+
+    // Calculate score: match by questionId if present, else by index
     let score = 0;
     const totalQuestions = test.questions.length;
-
-    answers.forEach((answer) => {
-      const question = test.questions[answer.questionIndex];
-      if (question && question.correctAnswer === answer.selectedAnswer) {
+    for (let i = 0; i < totalQuestions; i++) {
+      let answer = answersToSave[i];
+      let question = test.questions[i];
+      // If questionId is present, try to match
+      if (answer && answer.questionId) {
+        const idx = test.questions.findIndex(
+          (q, qIdx) => `q${qIdx}` === answer.questionId
+        );
+        if (idx !== -1) {
+          question = test.questions[idx];
+        }
+      }
+      if (
+        answer &&
+        question &&
+        question.correctAnswer === answer.selectedAnswer
+      ) {
         score++;
       }
-    });
+    }
 
     const percentage = (score / totalQuestions) * 100;
 
@@ -222,7 +241,7 @@ exports.submitTest = async (req, res) => {
       testId: req.params.id,
       studentEmail,
       studentName,
-      answers,
+      answers: answersToSave,
       score,
       totalQuestions,
       percentage,
