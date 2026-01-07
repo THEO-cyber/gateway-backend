@@ -41,10 +41,11 @@ exports.getResultDetail = async (req, res) => {
         debug: { id, email },
       });
     }
-    // Build detailed results
+    // Build detailed results (match by questionId: q0, q1, ...)
     const details = test.questions.map((q, idx) => {
+      const questionId = `q${idx}`;
       const userAnswer = submission.answers.find(
-        (a) => a.questionIndex === idx
+        (a) => a.questionId === questionId
       );
       return {
         questionIndex: idx,

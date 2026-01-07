@@ -281,12 +281,32 @@ exports.updateUser = async (req, res) => {
 // @access  Private (Admin only)
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const userId = req.params.id;
+    if (!userId || userId === "undefined") {
+      return res.status(400).json({
+        success: false,
+        message: "Missing or invalid user ID in request.",
+        details: {
+          userId,
+          method: req.method,
+          url: req.originalUrl,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found.",
+        details: {
+          userId,
+          method: req.method,
+          url: req.originalUrl,
+          timestamp: new Date().toISOString(),
+        },
       });
     }
 
@@ -299,12 +319,20 @@ exports.deleteUser = async (req, res) => {
     res.json({
       success: true,
       message: "User and associated content deleted successfully",
+      details: { userId },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: "Failed to delete user",
       error: error.message,
+      stack: error.stack,
+      details: {
+        userId: req.params.id,
+        method: req.method,
+        url: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      },
     });
   }
 };
