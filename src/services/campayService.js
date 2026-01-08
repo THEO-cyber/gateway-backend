@@ -33,7 +33,7 @@ async function initiatePayment({ amount, phone, description }) {
       "Invalid phone number format. Must be a valid Cameroon mobile number."
     );
   }
-  if (typeof amount !== "number" || amount < 100) {
+  if (typeof amount !== "number" || amount < 25) {
     throw new Error("Invalid payment amount.");
   }
   const token = await getAccessToken();
