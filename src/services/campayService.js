@@ -2,6 +2,7 @@
 const axios = require("axios");
 
 // Use environment variable for base URL (production/sandbox)
+// For sandbox/testing, use https://demo.campay.net/api
 const CAMPAY_BASE_URL =
   process.env.CAMPAY_BASE_URL || "https://api.campay.net/api";
 const CAMPAY_API_KEY = process.env.CAMPAY_API_KEY;
