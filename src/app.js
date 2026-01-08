@@ -76,6 +76,9 @@ app.use("/api/study-materials", require("./routes/studyMaterials")); // Study ma
 app.use("/api/content/materials", require("./routes/studyMaterials")); // Admin panel alias
 app.use("/api/students", require("./routes/students")); // Student profiles
 
+// Payment route
+app.use("/api/payment", require("./routes/payment"));
+
 // Health check
 app.get("/health", (req, res) => {
   res.json({
