@@ -112,6 +112,29 @@ exports.createAnnouncement = async (req, res) => {
       createdBy: req.user._id,
     });
 
+    // Emit websocket event to the specialty/department room for real-time update
+    try {
+      const { getIO } = require("../socket");
+      const io = getIO();
+      if (io) {
+        // Use targetAudience as the room name (e.g., "ltm", "swe", or "all")
+        const room = announcement.targetAudience || "all";
+        io.to(room).emit("new-announcement", {
+          id: announcement._id,
+          title: announcement.title,
+          message: announcement.message,
+          category: announcement.category,
+          targetAudience: announcement.targetAudience,
+          isPinned: announcement.isPinned,
+          expiresAt: announcement.expiresAt,
+          createdAt: announcement.createdAt,
+        });
+      }
+    } catch (e) {
+      // Log but don't block response
+      console.error("WebSocket emit error:", e.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Announcement created successfully",

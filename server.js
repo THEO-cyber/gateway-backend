@@ -17,12 +17,18 @@ if (!fs.existsSync(uploadPath)) {
 connectDB();
 
 // Start server
-const server = app.listen(PORT, "0.0.0.0", () => {
+
+// Socket.io integration
+const httpServer = app.listen(PORT, "0.0.0.0", () => {
   logger.info(
     `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`
   );
   logger.info(`📁 Upload path: ${uploadPath}`);
 });
+
+// Initialize socket.io
+const { initSocket } = require("./src/socket");
+initSocket(httpServer);
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
