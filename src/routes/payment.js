@@ -31,9 +31,9 @@ router.post("/initiate", async (req, res) => {
         .status(400)
         .json({ success: false, message: "Phone number is required." });
     }
-    // Initiate payment of 1000 XAF
+    // Initiate payment of 25 XAF
     const result = await initiatePayment({
-      amount: 1000,
+      amount: 25,
       phone,
       description: "App access payment",
     });
