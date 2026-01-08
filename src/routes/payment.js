@@ -39,7 +39,8 @@ router.post("/initiate", async (req, res) => {
     });
     res.json({ success: true, data: result });
   } catch (error) {
-    // Never leak sensitive error details
+    // Log error for debugging (remove in production)
+    console.error("Campay payment error:", error);
     res
       .status(500)
       .json({ success: false, message: "Payment initiation failed." });
