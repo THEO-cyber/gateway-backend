@@ -1,25 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { initiatePayment } = require("../services/campayService");
-
-// Campay webhook endpoint for payment confirmation
-router.post("/webhook", (req, res) => {
-  // Security: Validate Campay webhook key
-  const receivedKey =
-    req.headers["x-campay-webhook-key"] || req.body.webhook_key;
-  const expectedKey = process.env.CAMPAY_WEBHOOK_KEY;
-  if (!expectedKey || receivedKey !== expectedKey) {
-    return res
-      .status(401)
-      .json({ success: false, message: "Unauthorized webhook" });
-  }
-
-  // TODO: Update user access/payment status in your DB based on req.body
-  // Example: req.body.reference, req.body.status, req.body.amount, req.body.phone
-
-  // Always respond 200 to acknowledge receipt
-  res.status(200).json({ success: true });
-});
+const { initiateNkwaPayment } = require("../services/nkwaPayService");
 
 // POST /api/payment/initiate
 // Secure payment initiation endpoint
@@ -27,23 +8,33 @@ router.post("/initiate", async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) {
+      console.error("[Payment] Missing phone number in request body", req.body);
       return res
         .status(400)
         .json({ success: false, message: "Phone number is required." });
     }
-    // Initiate payment of 25 XAF
-    const result = await initiatePayment({
-      amount: 25,
-      phone,
-      description: "App access payment",
-    });
+    // Nkwa Pay expects phone in format '2376XXXXXXXX'
+    const phoneNumber = phone.startsWith("237") ? phone : `237${phone}`;
+    const result = await initiateNkwaPayment({ amount: 25, phoneNumber });
     res.json({ success: true, data: result });
   } catch (error) {
-    // Log error for debugging (remove in production)
-    console.error("Campay payment error:", error);
+    // Enhanced error logging for debugging
+    if (error.response) {
+      console.error("[Payment] Nkwa Pay API error:", {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers,
+      });
+    } else {
+      console.error("[Payment] Nkwa Pay error:", error.message, error.stack);
+    }
     res
       .status(500)
-      .json({ success: false, message: "Payment initiation failed." });
+      .json({
+        success: false,
+        message: "Payment initiation failed.",
+        error: error.message,
+      });
   }
 });
 
