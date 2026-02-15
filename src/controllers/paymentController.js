@@ -1,9 +1,9 @@
-const { 
-  initiateNkwaPayment, 
-  checkPaymentStatus, 
-  processWebhook, 
+const {
+  initiateNkwaPayment,
+  checkPaymentStatus,
+  processWebhook,
   getAllPayments,
-  PAYMENT_FEE 
+  PAYMENT_FEE,
 } = require("../services/nkwaPayService");
 const Payment = require("../models/Payment");
 const User = require("../models/User");
@@ -11,60 +11,65 @@ const User = require("../models/User");
 // Initiate payment
 exports.initiatePayment = async (req, res) => {
   try {
-    const { phone, purpose = 'registration_fee', description } = req.body;
-    
+    const { phone, purpose = "registration_fee", description } = req.body;
+
     if (!phone) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Phone number is required." 
+      return res.status(400).json({
+        success: false,
+        message: "Phone number is required.",
       });
     }
-    
+
     const userId = req.user.userId;
     const userEmail = req.user.email;
-    
+
     // Check if user has pending payments
     const pendingPayment = await Payment.findOne({
       userId,
-      status: { $in: ['pending', 'processing'] }
+      status: { $in: ["pending", "processing"] },
     }).sort({ createdAt: -1 });
-    
+
     if (pendingPayment) {
       // Check if pending payment is older than 10 minutes, if so, mark as failed
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       if (pendingPayment.createdAt < tenMinutesAgo) {
-        await pendingPayment.markAsFailed('Payment timeout', 'timeout');
+        await pendingPayment.markAsFailed("Payment timeout", "timeout");
       } else {
         return res.status(400).json({
           success: false,
-          message: "You have a pending payment. Please complete it or wait for it to expire before initiating a new one.",
+          message:
+            "You have a pending payment. Please complete it or wait for it to expire before initiating a new one.",
           data: {
             transactionId: pendingPayment.transactionId,
             amount: pendingPayment.amount,
-            createdAt: pendingPayment.createdAt
-          }
+            createdAt: pendingPayment.createdAt,
+          },
         });
       }
     }
-    
-    console.log(`[PaymentController] Initiating payment for user: ${userId} (${userEmail})`);
-    
-    const result = await initiateNkwaPayment({ 
+
+    console.log(
+      `[PaymentController] Initiating payment for user: ${userId} (${userEmail})`,
+    );
+
+    const result = await initiateNkwaPayment({
       phoneNumber: phone,
       userId,
       userEmail,
       purpose,
-      description: description || `HND Gateway ${purpose.replace('_', ' ')}`
+      description: description || `HND Gateway ${purpose.replace("_", " ")}`,
     });
-    
+
     res.json({ success: true, data: result });
-    
   } catch (error) {
-    console.error("[PaymentController] Payment initiation failed:", error.message);
-    
+    console.error(
+      "[PaymentController] Payment initiation failed:",
+      error.message,
+    );
+
     res.status(500).json({
       success: false,
-      message: error.message || "Payment initiation failed."
+      message: error.message || "Payment initiation failed.",
     });
   }
 };
@@ -74,40 +79,39 @@ exports.checkStatus = async (req, res) => {
   try {
     const { transactionId } = req.params;
     const userId = req.user.userId;
-    
+
     if (!transactionId) {
       return res.status(400).json({
         success: false,
-        message: "Transaction ID is required"
+        message: "Transaction ID is required",
       });
     }
-    
+
     // Verify the payment belongs to the user
-    const payment = await Payment.findOne({ 
-      transactionId, 
-      userId 
+    const payment = await Payment.findOne({
+      transactionId,
+      userId,
     });
-    
+
     if (!payment) {
       return res.status(404).json({
         success: false,
-        message: "Payment not found or doesn't belong to you"
+        message: "Payment not found or doesn't belong to you",
       });
     }
-    
+
     const result = await checkPaymentStatus(transactionId);
-    
+
     res.json({
       success: true,
-      data: result
+      data: result,
     });
-    
   } catch (error) {
     console.error("[PaymentController] Status check failed:", error.message);
-    
+
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to check payment status"
+      message: error.message || "Failed to check payment status",
     });
   }
 };
@@ -115,46 +119,53 @@ exports.checkStatus = async (req, res) => {
 // Handle webhook
 exports.handleWebhook = async (req, res) => {
   try {
-    const signature = req.headers['x-signature'] || req.headers['x-nkwa-signature'];
+    const signature =
+      req.headers["x-signature"] || req.headers["x-nkwa-signature"];
     const payload = req.body;
-    
+
     console.log("[PaymentController] Webhook received:", {
-      signature: signature ? 'present' : 'missing',
+      signature: signature ? "present" : "missing",
       reference: payload.reference,
-      status: payload.status
+      status: payload.status,
     });
-    
+
     const result = await processWebhook(payload, signature);
-    
+
     if (result.success) {
       // If payment was successful, update user's payment status
-      if (result.status === 'success') {
+      if (result.status === "success") {
         const payment = await Payment.findByTransactionId(result.transactionId);
         if (payment && payment.userId) {
           const user = await User.findById(payment.userId);
           if (user && !user.paymentStatus) {
-            user.paymentStatus = 'completed';
+            user.paymentStatus = "completed";
             user.paymentDate = new Date();
             user.paymentAmount = payment.amount;
             await user.save();
-            
-            console.log(`[PaymentController] Updated user payment status: ${user._id}`);
+
+            console.log(
+              `[PaymentController] Updated user payment status: ${user._id}`,
+            );
           }
         }
       }
-      
-      res.status(200).json({ success: true, message: 'Webhook processed successfully' });
+
+      res
+        .status(200)
+        .json({ success: true, message: "Webhook processed successfully" });
     } else {
       res.status(400).json({ success: false, message: result.message });
     }
-    
   } catch (error) {
-    console.error("[PaymentController] Webhook processing failed:", error.message);
-    
+    console.error(
+      "[PaymentController] Webhook processing failed:",
+      error.message,
+    );
+
     // Still return 200 to prevent retries for invalid webhooks
     res.status(200).json({
       success: false,
-      message: "Webhook processing failed"
+      message: "Webhook processing failed",
     });
   }
 };
@@ -165,9 +176,9 @@ exports.getFee = (req, res) => {
     success: true,
     data: {
       amount: PAYMENT_FEE,
-      currency: 'XAF',
-      formattedAmount: `${PAYMENT_FEE.toLocaleString()} FCFA`
-    }
+      currency: "XAF",
+      formattedAmount: `${PAYMENT_FEE.toLocaleString()} FCFA`,
+    },
   });
 };
 
@@ -177,20 +188,22 @@ exports.getHistory = async (req, res) => {
     const userId = req.user.userId;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    
+
     const result = await getAllPayments(page, limit, { userId });
-    
+
     res.json({
       success: true,
-      data: result
+      data: result,
     });
-    
   } catch (error) {
-    console.error("[PaymentController] Failed to fetch payment history:", error.message);
-    
+    console.error(
+      "[PaymentController] Failed to fetch payment history:",
+      error.message,
+    );
+
     res.status(500).json({
       success: false,
-      message: "Failed to fetch payment history"
+      message: "Failed to fetch payment history",
     });
   }
 };
@@ -203,25 +216,27 @@ exports.getAllPayments = async (req, res) => {
     const status = req.query.status;
     const phoneNumber = req.query.phone;
     const userId = req.query.userId;
-    
+
     const filters = {};
     if (status) filters.status = status;
     if (phoneNumber) filters.phoneNumber = phoneNumber;
     if (userId) filters.userId = userId;
-    
+
     const result = await getAllPayments(page, limit, filters);
-    
+
     res.json({
       success: true,
-      data: result
+      data: result,
     });
-    
   } catch (error) {
-    console.error("[PaymentController] Admin: Failed to fetch payments:", error.message);
-    
+    console.error(
+      "[PaymentController] Admin: Failed to fetch payments:",
+      error.message,
+    );
+
     res.status(500).json({
       success: false,
-      message: "Failed to fetch payments"
+      message: "Failed to fetch payments",
     });
   }
 };
@@ -234,38 +249,38 @@ exports.getStats = async (req, res) => {
         $group: {
           _id: "$status",
           count: { $sum: 1 },
-          totalAmount: { $sum: "$amount" }
-        }
-      }
+          totalAmount: { $sum: "$amount" },
+        },
+      },
     ]);
-    
+
     const totalPayments = await Payment.countDocuments();
     const totalRevenue = await Payment.aggregate([
-      { $match: { status: 'success' } },
-      { $group: { _id: null, total: { $sum: "$amount" } } }
+      { $match: { status: "success" } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
-    
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     const todayPayments = await Payment.countDocuments({
-      createdAt: { $gte: todayStart }
+      createdAt: { $gte: todayStart },
     });
-    
+
     const successfulPayments = await Payment.countDocuments({
-      status: 'success'
+      status: "success",
     });
-    
+
     const pendingPayments = await Payment.countDocuments({
-      status: { $in: ['pending', 'processing'] }
+      status: { $in: ["pending", "processing"] },
     });
-    
+
     // Get recent payments
     const recentPayments = await Payment.find()
-      .populate('userId', 'username email firstName lastName')
+      .populate("userId", "username email firstName lastName")
       .sort({ createdAt: -1 })
       .limit(5);
-    
+
     res.json({
       success: true,
       data: {
@@ -276,28 +291,32 @@ exports.getStats = async (req, res) => {
         totalRevenue: totalRevenue[0]?.total || 0,
         todayPayments,
         paymentFee: PAYMENT_FEE,
-        recentPayments: recentPayments.map(p => ({
+        recentPayments: recentPayments.map((p) => ({
           transactionId: p.transactionId,
           amount: p.amount,
           status: p.status,
           phoneNumber: p.phoneNumber,
-          user: p.userId ? {
-            username: p.userId.username,
-            email: p.userId.email,
-            name: `${p.userId.firstName || ''} ${p.userId.lastName || ''}`.trim()
-          } : null,
+          user: p.userId
+            ? {
+                username: p.userId.username,
+                email: p.userId.email,
+                name: `${p.userId.firstName || ""} ${p.userId.lastName || ""}`.trim(),
+              }
+            : null,
           createdAt: p.createdAt,
-          completedAt: p.completedAt
-        }))
-      }
+          completedAt: p.completedAt,
+        })),
+      },
     });
-    
   } catch (error) {
-    console.error("[PaymentController] Admin: Failed to fetch stats:", error.message);
-    
+    console.error(
+      "[PaymentController] Admin: Failed to fetch stats:",
+      error.message,
+    );
+
     res.status(500).json({
       success: false,
-      message: "Failed to fetch payment statistics"
+      message: "Failed to fetch payment statistics",
     });
   }
 };
@@ -306,30 +325,32 @@ exports.getStats = async (req, res) => {
 exports.retryWebhook = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    
+
     const payment = await Payment.findByTransactionId(transactionId);
     if (!payment) {
       return res.status(404).json({
         success: false,
-        message: "Payment not found"
+        message: "Payment not found",
       });
     }
-    
+
     // Check payment status with Nkwa Pay
     const result = await checkPaymentStatus(transactionId);
-    
+
     res.json({
       success: true,
       message: "Payment status updated",
-      data: result
+      data: result,
     });
-    
   } catch (error) {
-    console.error("[PaymentController] Admin: Failed to retry webhook:", error.message);
-    
+    console.error(
+      "[PaymentController] Admin: Failed to retry webhook:",
+      error.message,
+    );
+
     res.status(500).json({
       success: false,
-      message: "Failed to retry webhook"
+      message: "Failed to retry webhook",
     });
   }
 };
@@ -342,5 +363,5 @@ module.exports = {
   getHistory: exports.getHistory,
   getAllPayments: exports.getAllPayments,
   getStats: exports.getStats,
-  retryWebhook: exports.retryWebhook
+  retryWebhook: exports.retryWebhook,
 };

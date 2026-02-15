@@ -21,7 +21,7 @@ connectDB();
 // Socket.io integration
 const httpServer = app.listen(PORT, "0.0.0.0", () => {
   logger.info(
-    `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`
+    `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`,
   );
   logger.info(`📁 Upload path: ${uploadPath}`);
 });
