@@ -33,13 +33,13 @@ initSocket(httpServer);
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
   logger.error(`Unhandled Rejection: ${err.message}`);
-  server.close(() => process.exit(1));
+  httpServer.close(() => process.exit(1));
 });
 
 // Handle SIGTERM
 process.on("SIGTERM", () => {
   logger.info("SIGTERM signal received: closing HTTP server");
-  server.close(() => {
+  httpServer.close(() => {
     logger.info("HTTP server closed");
   });
 });
