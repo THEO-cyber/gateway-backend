@@ -20,12 +20,15 @@ This document describes the complete payment integration with Nkwa Pay for the H
 ### Public Endpoints
 
 #### Get Payment Fee
+
 ```http
 GET /api/payment/fee
 ```
+
 Returns current payment fee information.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -38,15 +41,19 @@ Returns current payment fee information.
 ```
 
 #### Webhook Endpoint
+
 ```http
 POST /api/payment/webhook
 ```
+
 Receives payment status updates from Nkwa Pay.
 
 **Headers:**
+
 - `X-Signature` or `X-Nkwa-Signature`: Webhook signature for verification
 
 **Payload:**
+
 ```json
 {
   "reference": "HND_1708000000000_ABC123",
@@ -60,12 +67,14 @@ Receives payment status updates from Nkwa Pay.
 ### Authenticated User Endpoints
 
 #### Initiate Payment
+
 ```http
 POST /api/payment/initiate
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "phone": "671234567",
@@ -75,6 +84,7 @@ Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -90,12 +100,14 @@ Authorization: Bearer <token>
 ```
 
 #### Check Payment Status
+
 ```http
 GET /api/payment/status/:transactionId
 Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -111,12 +123,14 @@ Authorization: Bearer <token>
 ```
 
 #### Get Payment History
+
 ```http
 GET /api/payment/history?page=1&limit=10
 Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -135,18 +149,21 @@ Authorization: Bearer <token>
 ### Admin Endpoints
 
 #### Get All Payments
+
 ```http
 GET /api/payment/admin/all?page=1&limit=20&status=success
 Authorization: Bearer <admin_token>
 ```
 
 #### Get Payment Statistics
+
 ```http
 GET /api/payment/admin/stats
 Authorization: Bearer <admin_token>
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -167,6 +184,7 @@ Authorization: Bearer <admin_token>
 ```
 
 #### Retry Payment Webhook
+
 ```http
 POST /api/payment/admin/retry/:transactionId
 Authorization: Bearer <admin_token>
@@ -196,13 +214,13 @@ The system automatically formats Cameroon phone numbers:
 
 ## Payment States
 
-| Status | Description | User Action Required |
-|--------|-------------|---------------------|
-| `pending` | Payment record created, waiting for Nkwa Pay response | None |
-| `processing` | Payment sent to user's phone, awaiting confirmation | Check phone and confirm payment |
-| `success` | Payment completed successfully | None |
-| `failed` | Payment failed or was cancelled | Try again or contact support |
-| `refunded` | Payment was refunded | None |
+| Status       | Description                                           | User Action Required            |
+| ------------ | ----------------------------------------------------- | ------------------------------- |
+| `pending`    | Payment record created, waiting for Nkwa Pay response | None                            |
+| `processing` | Payment sent to user's phone, awaiting confirmation   | Check phone and confirm payment |
+| `success`    | Payment completed successfully                        | None                            |
+| `failed`     | Payment failed or was cancelled                       | Try again or contact support    |
+| `refunded`   | Payment was refunded                                  | None                            |
 
 ## Webhook Security
 
@@ -211,15 +229,15 @@ The system automatically formats Cameroon phone numbers:
 Webhooks are secured using HMAC-SHA256 signatures:
 
 ```javascript
-const crypto = require('crypto');
+const crypto = require("crypto");
 
 const expectedSignature = crypto
-  .createHmac('sha256', process.env.NKWAPAY_WEBHOOK_SECRET)
+  .createHmac("sha256", process.env.NKWAPAY_WEBHOOK_SECRET)
   .update(JSON.stringify(payload))
-  .digest('hex');
+  .digest("hex");
 
 if (signature !== expectedSignature) {
-  throw new Error('Invalid webhook signature');
+  throw new Error("Invalid webhook signature");
 }
 ```
 
@@ -342,6 +360,7 @@ The system provides comprehensive logging:
 - Status changes and completions
 
 Monitor these logs for:
+
 - Payment success rates
 - Webhook delivery issues
 - Error patterns
@@ -376,5 +395,6 @@ Monitor these logs for:
 ## Contact
 
 For technical issues or questions about the payment integration, contact:
+
 - Backend Developer: [Your contact information]
 - Nkwa Pay Support: [Nkwa Pay support details]

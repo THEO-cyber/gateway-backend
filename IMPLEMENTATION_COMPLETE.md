@@ -48,6 +48,7 @@ I have successfully implemented a comprehensive payment system for your HND Gate
 ### 🔧 Configuration Updates
 
 **Environment Variables Added:**
+
 ```env
 NKWAPAY_API_KEY=9c4K34an9x4aDv01jsfDt
 NKWAPAY_BASE_URL=https://api.pay.staging.mynkwa.com
@@ -65,15 +66,18 @@ WEBHOOK_URL=https://your-domain.com/api/payment/webhook
 ### 🚀 API Endpoints Implemented
 
 #### Public Endpoints
+
 - `GET /api/payment/fee` - Get payment fee (1,000 FCFA)
 - `POST /api/payment/webhook` - Receive Nkwa Pay webhooks
 
 #### User Endpoints (Authenticated)
+
 - `POST /api/payment/initiate` - Initiate payment
 - `GET /api/payment/status/:transactionId` - Check payment status
 - `GET /api/payment/history` - Get payment history
 
 #### Admin Endpoints
+
 - `GET /api/payment/admin/all` - Get all payments
 - `GET /api/payment/admin/stats` - Get payment statistics
 - `POST /api/payment/admin/retry/:transactionId` - Retry webhook
@@ -90,6 +94,7 @@ WEBHOOK_URL=https://your-domain.com/api/payment/webhook
 ### 📱 Phone Number Support
 
 Automatic formatting for Cameroon numbers:
+
 - Input: `671234567` → Output: `237671234567`
 - Input: `677889900` → Output: `237677889900`
 - Validation for proper formats
@@ -97,27 +102,34 @@ Automatic formatting for Cameroon numbers:
 ## 🎯 Next Steps
 
 ### 1. Production Configuration
+
 Update `.env` for production:
+
 ```env
 NKWAPAY_BASE_URL=https://api.pay.mynkwa.com
 WEBHOOK_URL=https://your-live-domain.com/api/payment/webhook
 ```
 
 ### 2. Webhook Setup
+
 In your Nkwa Pay dashboard:
+
 1. Set webhook URL: `https://your-domain.com/api/payment/webhook`
 2. Configure webhook secret key
 3. Test webhook delivery
 
 ### 3. Testing
+
 Your server is ready! Test the endpoints:
 
 **Get payment fee:**
+
 ```bash
 curl http://localhost:5000/api/payment/fee
 ```
 
 **Expected response:**
+
 ```json
 {
   "success": true,
@@ -132,6 +144,7 @@ curl http://localhost:5000/api/payment/fee
 ### 4. Integration Points
 
 The payment system integrates with:
+
 - **User Registration**: Students pay 1,000 FCFA to complete registration
 - **Admin Dashboard**: View payment statistics and manage transactions
 - **User Profile**: Track payment status and history
@@ -139,6 +152,7 @@ The payment system integrates with:
 ### 5. Monitoring
 
 Monitor these key metrics:
+
 - Payment success rate
 - Webhook delivery status
 - Transaction completion times

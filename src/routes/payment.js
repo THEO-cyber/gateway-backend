@@ -29,6 +29,11 @@ router.get("/admin/all", protect, isAdmin, paymentController.getAllPayments);
 router.get("/admin/stats", protect, isAdmin, paymentController.getStats);
 
 // POST /api/payment/admin/retry/:transactionId - Retry failed payment webhook
-router.post("/admin/retry/:transactionId", protect, isAdmin, paymentController.retryWebhook);
+router.post(
+  "/admin/retry/:transactionId",
+  protect,
+  isAdmin,
+  paymentController.retryWebhook,
+);
 
 module.exports = router;

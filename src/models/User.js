@@ -50,23 +50,23 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  
+
   // Payment related fields
   paymentStatus: {
     type: String,
-    enum: ['pending', 'completed', 'failed', 'exempt'],
-    default: 'pending'
+    enum: ["pending", "completed", "failed", "exempt"],
+    default: "pending",
   },
   paymentDate: {
-    type: Date
+    type: Date,
   },
   paymentAmount: {
-    type: Number
+    type: Number,
   },
   paymentTransactionId: {
-    type: String
+    type: String,
   },
-  
+
   resetPasswordOTP: String,
   resetPasswordExpire: Date,
   resetPasswordAttempts: {
