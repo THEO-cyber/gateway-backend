@@ -1,41 +1,34 @@
 const express = require("express");
 const router = express.Router();
-const { initiateNkwaPayment } = require("../services/nkwaPayService");
+const paymentController = require("../controllers/paymentController");
+const { protect } = require("../middleware/auth");
+const { isAdmin } = require("../middleware/adminAuth");
 
-// POST /api/payment/initiate
-// Secure payment initiation endpoint
-router.post("/initiate", async (req, res) => {
-  try {
-    const { phone } = req.body;
-    if (!phone) {
-      console.error("[Payment] Missing phone number in request body", req.body);
-      return res
-        .status(400)
-        .json({ success: false, message: "Phone number is required." });
-    }
-    // Nkwa Pay expects phone in format '2376XXXXXXXX'
-    const phoneNumber = phone.startsWith("237") ? phone : `237${phone}`;
-    const result = await initiateNkwaPayment({ amount: 25, phoneNumber });
-    res.json({ success: true, data: result });
-  } catch (error) {
-    // Enhanced error logging for debugging
-    if (error.response) {
-      console.error("[Payment] Nkwa Pay API error:", {
-        status: error.response.status,
-        data: error.response.data,
-        headers: error.response.headers,
-      });
-    } else {
-      console.error("[Payment] Nkwa Pay error:", error.message, error.stack);
-    }
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Payment initiation failed.",
-        error: error.message,
-      });
-  }
-});
+// Public routes
+// POST /api/payment/webhook - Nkwa Pay webhook endpoint (no auth required)
+router.post("/webhook", paymentController.handleWebhook);
+
+// GET /api/payment/fee - Get current payment fee
+router.get("/fee", paymentController.getFee);
+
+// User routes (require authentication)
+// POST /api/payment/initiate - Initiate payment
+router.post("/initiate", protect, paymentController.initiatePayment);
+
+// GET /api/payment/status/:transactionId - Check payment status
+router.get("/status/:transactionId", protect, paymentController.checkStatus);
+
+// GET /api/payment/history - Get user's payment history
+router.get("/history", protect, paymentController.getHistory);
+
+// Admin routes (require authentication and admin privileges)
+// GET /api/payment/admin/all - Get all payments
+router.get("/admin/all", protect, isAdmin, paymentController.getAllPayments);
+
+// GET /api/payment/admin/stats - Get payment statistics
+router.get("/admin/stats", protect, isAdmin, paymentController.getStats);
+
+// POST /api/payment/admin/retry/:transactionId - Retry failed payment webhook
+router.post("/admin/retry/:transactionId", protect, isAdmin, paymentController.retryWebhook);
 
 module.exports = router;
