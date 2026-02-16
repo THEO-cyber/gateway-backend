@@ -88,7 +88,9 @@ async function initiateNkwaPayment({
 
     // Debug configuration
     console.log(`[NkwaPayService] Using URL: ${NKWAPAY_BASE_URL}/collect`);
-    console.log(`[NkwaPayService] Using API Key: ${NKWAPAY_API_KEY ? NKWAPAY_API_KEY.substring(0, 5) + '...' : 'NOT SET'}`);
+    console.log(
+      `[NkwaPayService] Using API Key: ${NKWAPAY_API_KEY ? NKWAPAY_API_KEY.substring(0, 5) + "..." : "NOT SET"}`,
+    );
 
     // Make API call to Nkwa Pay
     const response = await axios.post(
