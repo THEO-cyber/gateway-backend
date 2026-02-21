@@ -8,6 +8,12 @@ class RedisClient {
   }
 
   async connect() {
+    // Skip Redis entirely if disabled
+    if (process.env.DISABLE_REDIS === 'true') {
+      logger.info("💾 Redis disabled - Server running without caching");
+      return false;
+    }
+
     try {
       const redisConfig = {
         host: process.env.REDIS_HOST || "localhost",
