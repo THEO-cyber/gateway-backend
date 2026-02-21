@@ -7,7 +7,8 @@ const NKWAPAY_BASE_URL =
   process.env.NKWAPAY_BASE_URL || "https://api.pay.staging.mynkwa.com";
 const NKWAPAY_API_KEY = process.env.NKWAPAY_API_KEY;
 const NKWAPAY_WEBHOOK_SECRET = process.env.NKWAPAY_WEBHOOK_SECRET;
-const PAYMENT_FEE = parseInt(process.env.PAYMENT_FEE) || 1000;
+// Legacy payment fee removed - now using subscription-based pricing
+// const PAYMENT_FEE = parseInt(process.env.PAYMENT_FEE) || 1000;
 
 // Generate unique transaction ID
 function generateTransactionId() {
@@ -18,6 +19,11 @@ function generateTransactionId() {
 
 // Format phone number for Cameroon
 function formatPhoneNumber(phone) {
+  // Check if phone is null, undefined, or empty
+  if (!phone || typeof phone !== 'string') {
+    throw new Error("Phone number is required and must be a valid string");
+  }
+
   // Remove any non-digit characters
   let cleaned = phone.replace(/\D/g, "");
 
@@ -36,6 +42,7 @@ function formatPhoneNumber(phone) {
   );
 }
 
+// DEPRECATED: Legacy payment function - Use subscription system instead
 async function initiateNkwaPayment({
   phoneNumber,
   userId = null,
@@ -43,128 +50,14 @@ async function initiateNkwaPayment({
   purpose = "registration_fee",
   description = "HND Gateway Registration Fee",
 }) {
-  if (!NKWAPAY_API_KEY) {
-    console.error("[NkwaPayService] Nkwa Pay API key not set");
-    throw new Error("Payment service configuration error");
-  }
+  console.warn(
+    "[NkwaPayService] DEPRECATED: Legacy payment function called. Use subscription system instead.",
+  );
 
-  try {
-    // Format phone number
-    const formattedPhone = formatPhoneNumber(phoneNumber);
-
-    // Generate unique transaction ID
-    const transactionId = generateTransactionId();
-
-    // Create payment record in database
-    const payment = new Payment({
-      transactionId,
-      amount: PAYMENT_FEE,
-      phoneNumber: formattedPhone,
-      userId,
-      userEmail,
-      purpose,
-      description,
-      status: "pending",
-    });
-
-    await payment.save();
-
-    console.log(`[NkwaPayService] Created payment record: ${transactionId}`);
-
-    // Prepare payment request
-    const paymentData = {
-      amount: PAYMENT_FEE,
-      phoneNumber: formattedPhone,
-      reference: transactionId,
-      description: description,
-      webhookUrl: process.env.WEBHOOK_URL || null,
-    };
-
-    console.log(`[NkwaPayService] Initiating payment:`, {
-      transactionId,
-      amount: PAYMENT_FEE,
-      phone: formattedPhone.substring(0, 6) + "XXX", // Masked for security
-    });
-
-    // Debug configuration
-    console.log(`[NkwaPayService] Using URL: ${NKWAPAY_BASE_URL}/collect`);
-    console.log(
-      `[NkwaPayService] Using API Key: ${NKWAPAY_API_KEY ? NKWAPAY_API_KEY.substring(0, 5) + "..." : "NOT SET"}`,
-    );
-
-    // Make API call to Nkwa Pay
-    const response = await axios.post(
-      `${NKWAPAY_BASE_URL}/collect`,
-      paymentData,
-      {
-        headers: {
-          "X-API-KEY": NKWAPAY_API_KEY,
-          "Content-Type": "application/json",
-        },
-        timeout: 30000, // 30 seconds timeout
-      },
-    );
-
-    // Update payment record with Nkwa Pay response
-    payment.nkwaPayResponse = response.data;
-    payment.nkwaTransactionId = response.data.transactionId || response.data.id;
-    payment.status = "processing";
-    await payment.save();
-
-    console.log(
-      `[NkwaPayService] Payment initiated successfully: ${transactionId}`,
-    );
-
-    return {
-      success: true,
-      transactionId,
-      nkwaTransactionId: payment.nkwaTransactionId,
-      amount: PAYMENT_FEE,
-      phoneNumber: formattedPhone,
-      status: "processing",
-      message:
-        "Payment request sent. Please check your phone for the payment prompt.",
-      data: response.data,
-    };
-  } catch (err) {
-    console.error("[NkwaPayService] Error initiating payment:", err.message);
-
-    // Update payment record if it exists
-    try {
-      const failedPayment = await Payment.findOne({ transactionId }).sort({
-        createdAt: -1,
-      });
-      if (failedPayment && failedPayment.status === "pending") {
-        await failedPayment.markAsFailed(
-          err.message,
-          err.response?.status?.toString(),
-        );
-      }
-    } catch (updateError) {
-      console.error(
-        "[NkwaPayService] Error updating failed payment:",
-        updateError.message,
-      );
-    }
-
-    if (err.response) {
-      console.error("[NkwaPayService] Nkwa Pay API error:", {
-        status: err.response.status,
-        data: err.response.data,
-        headers: err.response.headers,
-      });
-
-      throw new Error(
-        `Payment failed: ${err.response.data?.message || "Unknown error from payment provider"}`,
-      );
-    } else if (err.code === "ENOTFOUND" || err.code === "ECONNREFUSED") {
-      throw new Error(
-        "Payment service is temporarily unavailable. Please try again later.",
-      );
-    } else {
-      throw new Error(`Payment initialization failed: ${err.message}`);
-    }
-  }
+  throw new Error(
+    "Legacy payments are no longer supported. Please use the subscription system with plans starting at 75 XAF. " +
+      "Available plans: Per Course (75 XAF), Weekly (200 XAF), Monthly (500 XAF), 4-Month (1500 XAF)",
+  );
 }
 
 // Check payment status
@@ -344,10 +237,149 @@ async function getAllPayments(page = 1, limit = 20, filters = {}) {
   }
 }
 
+// Initiate subscription payment
+async function initiateSubscriptionPayment(
+  userId,
+  userEmail,
+  phoneNumber,
+  amount,
+  description,
+  transactionId,
+  subscriptionId,
+) {
+  try {
+    // Format phone number
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+
+    // Create payment record in database
+    const payment = new Payment({
+      transactionId,
+      amount,
+      phoneNumber: formattedPhone,
+      userId,
+      userEmail,
+      purpose: "subscription",
+      description,
+      status: "pending",
+      metadata: {
+        subscriptionId: subscriptionId.toString(),
+        isSubscriptionPayment: true,
+      },
+    });
+
+    await payment.save();
+
+    console.log(
+      `[NkwaPayService] Created subscription payment record: ${transactionId}`,
+    );
+
+    // Prepare payment request
+    const paymentData = {
+      amount,
+      phoneNumber: formattedPhone,
+      reference: transactionId,
+      description: description,
+      webhookUrl: process.env.WEBHOOK_URL || null,
+    };
+
+    console.log(`[NkwaPayService] Initiating subscription payment:`, {
+      transactionId,
+      amount,
+      phone: formattedPhone.substring(0, 6) + "XXX", // Masked for security
+      subscriptionId,
+    });
+
+    // Debug configuration
+    console.log(`[NkwaPayService] Using URL: ${NKWAPAY_BASE_URL}/collect`);
+    console.log(
+      `[NkwaPayService] Using API Key: ${NKWAPAY_API_KEY ? NKWAPAY_API_KEY.substring(0, 5) + "..." : "NOT SET"}`,
+    );
+
+    // Make API call to Nkwa Pay
+    const response = await axios.post(
+      `${NKWAPAY_BASE_URL}/collect`,
+      paymentData,
+      {
+        headers: {
+          "X-API-KEY": NKWAPAY_API_KEY,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000, // 30 seconds timeout
+      },
+    );
+
+    // Update payment record with Nkwa Pay response
+    payment.nkwaPayResponse = response.data;
+    payment.nkwaTransactionId = response.data.transactionId || response.data.id;
+    payment.status = "processing";
+    await payment.save();
+
+    console.log(
+      `[NkwaPayService] Subscription payment initiated successfully: ${transactionId}`,
+    );
+
+    return {
+      success: true,
+      transactionId,
+      nkwaTransactionId: payment.nkwaTransactionId,
+      amount,
+      phoneNumber: formattedPhone,
+      status: "processing",
+      message:
+        "Subscription payment request sent. Please check your phone for the payment prompt.",
+      data: response.data,
+    };
+  } catch (err) {
+    console.error(
+      "[NkwaPayService] Error initiating subscription payment:",
+      err.message,
+    );
+
+    // Update payment record if it exists
+    try {
+      const failedPayment = await Payment.findOne({ transactionId }).sort({
+        createdAt: -1,
+      });
+      if (failedPayment && failedPayment.status === "pending") {
+        await failedPayment.markAsFailed(
+          err.message,
+          err.response?.status?.toString(),
+        );
+      }
+    } catch (updateError) {
+      console.error(
+        "[NkwaPayService] Error updating failed subscription payment:",
+        updateError.message,
+      );
+    }
+
+    if (err.response) {
+      console.error("[NkwaPayService] Nkwa Pay API error:", {
+        status: err.response.status,
+        data: err.response.data,
+        headers: err.response.headers,
+      });
+
+      throw new Error(
+        `Subscription payment failed: ${err.response.data?.message || "Unknown error from payment provider"}`,
+      );
+    } else if (err.code === "ENOTFOUND" || err.code === "ECONNREFUSED") {
+      throw new Error(
+        "Payment service is temporarily unavailable. Please try again later.",
+      );
+    } else {
+      throw new Error(
+        `Subscription payment initialization failed: ${err.message}`,
+      );
+    }
+  }
+}
+
 module.exports = {
   initiateNkwaPayment,
+  initiateSubscriptionPayment,
   checkPaymentStatus,
   processWebhook,
   getAllPayments,
-  PAYMENT_FEE,
+  // PAYMENT_FEE removed - using subscription plans
 };

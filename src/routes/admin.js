@@ -30,6 +30,20 @@ const {
   bulkUploadPapers,
   deletePaper,
 } = require("../controllers/paperController");
+const {
+  getAllPayments,
+  getStats: getPaymentStats,
+  retryWebhook,
+  updatePaymentStatus,
+  getPaymentDetails,
+  refundPayment,
+} = require("../controllers/paymentController");
+const {
+  getAllSubscriptions,
+  getSubscriptionDetails,
+  updateSubscriptionStatus,
+  getSubscriptionStats,
+} = require("../controllers/subscriptionController");
 const upload = require("../middleware/upload");
 
 // All admin routes require authentication and admin role
@@ -73,5 +87,21 @@ router.get("/reports/active-users", getActiveUsers);
 router.post("/papers/upload", upload.array("papers", 10), bulkUploadPapers);
 // Paper delete (single file)
 router.delete("/papers/:id", deletePaper);
+
+// === PAYMENT & SUBSCRIPTION MANAGEMENT ===
+
+// Payment Management
+router.get("/payments", getAllPayments);
+router.get("/payments/stats", getPaymentStats);
+router.get("/payments/:paymentId", getPaymentDetails);
+router.put("/payments/:paymentId/status", updatePaymentStatus);
+router.post("/payments/:paymentId/refund", refundPayment);
+router.post("/payments/:paymentId/retry-webhook", retryWebhook);
+
+// Subscription Management
+router.get("/subscriptions", getAllSubscriptions);
+router.get("/subscriptions/stats", getSubscriptionStats);
+router.get("/subscriptions/:subscriptionId", getSubscriptionDetails);
+router.put("/subscriptions/:subscriptionId/status", updateSubscriptionStatus);
 
 module.exports = router;

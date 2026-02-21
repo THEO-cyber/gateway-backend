@@ -3,73 +3,66 @@ const {
   checkPaymentStatus,
   processWebhook,
   getAllPayments,
-  PAYMENT_FEE,
+  // PAYMENT_FEE removed - using subscription plans
 } = require("../services/nkwaPayService");
 const Payment = require("../models/Payment");
 const User = require("../models/User");
+const logger = require("../utils/logger");
+const { processSubscriptionWebhook } = require("./subscriptionController");
 
 // Initiate payment
 exports.initiatePayment = async (req, res) => {
   try {
-    const { phone, purpose = "registration_fee", description } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone number is required.",
-      });
-    }
-
-    const userId = req.user.userId;
-    const userEmail = req.user.email;
-
-    // Check if user has pending payments
-    const pendingPayment = await Payment.findOne({
-      userId,
-      status: { $in: ["pending", "processing"] },
-    }).sort({ createdAt: -1 });
-
-    if (pendingPayment) {
-      // Check if pending payment is older than 10 minutes, if so, mark as failed
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-      if (pendingPayment.createdAt < tenMinutesAgo) {
-        await pendingPayment.markAsFailed("Payment timeout", "timeout");
-      } else {
-        return res.status(400).json({
-          success: false,
-          message:
-            "You have a pending payment. Please complete it or wait for it to expire before initiating a new one.",
-          data: {
-            transactionId: pendingPayment.transactionId,
-            amount: pendingPayment.amount,
-            createdAt: pendingPayment.createdAt,
-          },
-        });
-      }
-    }
-
-    console.log(
-      `[PaymentController] Initiating payment for user: ${userId} (${userEmail})`,
-    );
-
-    const result = await initiateNkwaPayment({
-      phoneNumber: phone,
-      userId,
-      userEmail,
-      purpose,
-      description: description || `HND Gateway ${purpose.replace("_", " ")}`,
+    res.status(410).json({
+      success: false,
+      message:
+        "Legacy payments are no longer supported. Please use the subscription system for better value and flexibility.",
+      deprecated: true,
+      redirectTo: "/api/subscriptions",
+      availablePlans: [
+        {
+          type: "daily",
+          price: 100,
+          description: "Access specific course for 1 day",
+        },
+        {
+          type: "weekly",
+          price: 200,
+          description: "Access all courses for 1 week",
+        },
+        {
+          type: "monthly",
+          price: 500,
+          description: "Access all courses for 1 month",
+        },
+        {
+          type: "four_month",
+          price: 1500,
+          description: "Access all courses for 4 months",
+        },
+        {
+          type: "ai_monthly",
+          price: 500,
+          description: "Unlimited AI access for 1 month",
+        },
+      ],
+      migration: {
+        note: "The old 1000 XAF fee has been replaced with flexible subscription plans starting at 75 XAF",
+        benefit:
+          "You now get better value and can choose plans that fit your needs",
+      },
     });
-
-    res.json({ success: true, data: result });
   } catch (error) {
     console.error(
-      "[PaymentController] Payment initiation failed:",
+      "[PaymentController] Error in deprecated payment endpoint:",
       error.message,
     );
 
     res.status(500).json({
       success: false,
-      message: error.message || "Payment initiation failed.",
+      message:
+        "Payment system has been migrated to subscriptions. Please use /api/subscriptions instead.",
+      error: error.message,
     });
   }
 };
@@ -107,7 +100,10 @@ exports.checkStatus = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error("[PaymentController] Status check failed:", error.message);
+    // Log error securely
+    if (process.env.NODE_ENV === 'development') {
+      console.error("[PaymentController] Status check failed:", error.message);
+    }
 
     res.status(500).json({
       success: false,
@@ -136,16 +132,45 @@ exports.handleWebhook = async (req, res) => {
       if (result.status === "success") {
         const payment = await Payment.findByTransactionId(result.transactionId);
         if (payment && payment.userId) {
-          const user = await User.findById(payment.userId);
-          if (user && !user.paymentStatus) {
-            user.paymentStatus = "completed";
-            user.paymentDate = new Date();
-            user.paymentAmount = payment.amount;
-            await user.save();
-
+          // Check if this is a subscription payment
+          if (
+            payment.metadata &&
+            payment.metadata.isSubscriptionPayment &&
+            payment.metadata.subscriptionId
+          ) {
             console.log(
-              `[PaymentController] Updated user payment status: ${user._id}`,
+              `[PaymentController] Processing subscription webhook: ${payment.metadata.subscriptionId}`,
             );
+
+            // Process subscription payment
+            const subscriptionResult = await processSubscriptionWebhook(
+              payment.metadata.subscriptionId,
+              result.status === "success" ? "completed" : "failed",
+              {
+                paymentId: payment._id,
+                transactionId: result.transactionId,
+                amount: payment.amount,
+              },
+            );
+
+            if (subscriptionResult.success) {
+              console.log(
+                `[PaymentController] Subscription activated: ${payment.metadata.subscriptionId}`,
+              );
+            }
+          } else {
+            // Handle regular payment (legacy system)
+            const user = await User.findById(payment.userId);
+            if (user && user.paymentStatus !== "completed") {
+              user.paymentStatus = "completed";
+              user.paymentDate = new Date();
+              user.paymentAmount = payment.amount;
+              await user.save();
+
+              console.log(
+                `[PaymentController] Updated user payment status: ${user._id}`,
+              );
+            }
           }
         }
       }
@@ -170,14 +195,38 @@ exports.handleWebhook = async (req, res) => {
   }
 };
 
-// Get current fee
+// Get current fee (deprecated - redirects to subscription plans)
 exports.getFee = (req, res) => {
   res.json({
-    success: true,
-    data: {
-      amount: PAYMENT_FEE,
-      currency: "XAF",
-      formattedAmount: `${PAYMENT_FEE.toLocaleString()} FCFA`,
+    success: false,
+    message: "Legacy payment fee has been replaced with subscription plans",
+    redirectTo: "/api/subscriptions/plans",
+    subscriptionPlans: {
+      per_course: {
+        amount: 75,
+        currency: "XAF",
+        description: "Per course access for 6 months",
+      },
+      weekly: {
+        amount: 200,
+        currency: "XAF",
+        description: "All courses for 1 week",
+      },
+      monthly: {
+        amount: 500,
+        currency: "XAF",
+        description: "All courses for 1 month",
+      },
+      four_month: {
+        amount: 1500,
+        currency: "XAF",
+        description: "All courses for 4 months",
+      },
+      ai_monthly: {
+        amount: 500,
+        currency: "XAF",
+        description: "Unlimited AI for 1 month",
+      },
     },
   });
 };
@@ -290,7 +339,7 @@ exports.getStats = async (req, res) => {
         pendingPayments,
         totalRevenue: totalRevenue[0]?.total || 0,
         todayPayments,
-        paymentFee: PAYMENT_FEE,
+        paymentSystem: "subscription-based",
         recentPayments: recentPayments.map((p) => ({
           transactionId: p.transactionId,
           amount: p.amount,
@@ -355,6 +404,136 @@ exports.retryWebhook = async (req, res) => {
   }
 };
 
+// Admin: Update payment status manually
+exports.updatePaymentStatus = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { status, adminNote } = req.body;
+
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    const oldStatus = payment.status;
+    payment.status = status;
+    payment.adminNote = adminNote;
+    payment.lastModifiedBy = req.user.id;
+    payment.lastModifiedAt = new Date();
+
+    await payment.save();
+
+    logger.info(
+      `Payment ${paymentId} status updated from ${oldStatus} to ${status} by admin ${req.user.email}`,
+    );
+
+    res.json({
+      success: true,
+      message: "Payment status updated successfully",
+      payment: payment,
+    });
+  } catch (error) {
+    logger.error(`Error updating payment status: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Admin: Get payment details with user info
+exports.getPaymentDetails = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+
+    const payment = await Payment.findById(paymentId)
+      .populate("userId", "name email phone")
+      .populate("subscriptionId");
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      payment: payment,
+    });
+  } catch (error) {
+    logger.error(`Error fetching payment details: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+// Admin: Refund payment
+exports.refundPayment = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const { reason, refundAmount } = req.body;
+
+    const payment = await Payment.findById(paymentId);
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    if (payment.status === "refunded") {
+      return res.status(400).json({
+        success: false,
+        message: "Payment already refunded",
+      });
+    }
+
+    payment.status = "refunded";
+    payment.refundReason = reason;
+    payment.refundAmount = refundAmount || payment.amount;
+    payment.refundedBy = req.user.id;
+    payment.refundedAt = new Date();
+
+    await payment.save();
+
+    // If payment had a subscription, deactivate it
+    if (payment.subscriptionId) {
+      const Subscription = require("../models/Subscription");
+      await Subscription.findByIdAndUpdate(payment.subscriptionId, {
+        status: "cancelled",
+        cancelledBy: req.user.id,
+        cancelledAt: new Date(),
+        cancellationReason: `Payment refunded: ${reason}`,
+      });
+    }
+
+    logger.info(
+      `Payment ${paymentId} refunded by admin ${req.user.email}. Reason: ${reason}`,
+    );
+
+    res.json({
+      success: true,
+      message: "Payment refunded successfully",
+      payment: payment,
+    });
+  } catch (error) {
+    logger.error(`Error refunding payment: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   initiatePayment: exports.initiatePayment,
   checkStatus: exports.checkStatus,
@@ -364,4 +543,8 @@ module.exports = {
   getAllPayments: exports.getAllPayments,
   getStats: exports.getStats,
   retryWebhook: exports.retryWebhook,
+  // Admin functions
+  updatePaymentStatus: exports.updatePaymentStatus,
+  getPaymentDetails: exports.getPaymentDetails,
+  refundPayment: exports.refundPayment,
 };

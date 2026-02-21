@@ -368,21 +368,25 @@ exports.forgotPassword = async (req, res) => {
       user.resetPasswordExpire = undefined;
       await user.save();
 
-      console.error("Forgot password email error:", error);
+      // Log error securely without exposing details
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Forgot password email error:", error);
+      }
       res.status(500).json({
         success: false,
         message: "Email could not be sent",
-        error: error.message,
-        stack: error.stack,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   } catch (error) {
-    console.error("Forgot password server error:", error);
+    // Log error securely without exposing details
+    if (process.env.NODE_ENV === 'development') {
+      console.error("Forgot password server error:", error);
+    }
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
-      stack: error.stack,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };
@@ -425,7 +429,10 @@ exports.verifyOTP = async (req, res) => {
           text: `You have entered an incorrect OTP 3 times. You can request another OTP after 30 minutes. If this wasn't you, please contact support.`,
         });
       } catch (e) {
-        console.error("Failed to send lockout email:", e);
+        // Log error securely without exposing details
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Failed to send lockout email:", e);
+        }
       }
       return res.status(429).json({
         success: false,
