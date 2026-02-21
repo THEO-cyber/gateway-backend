@@ -101,7 +101,7 @@ exports.checkStatus = async (req, res) => {
     });
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("[PaymentController] Status check failed:", error.message);
     }
 

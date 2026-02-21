@@ -41,7 +41,7 @@ const connectDB = async () => {
     const conn = await mongoose.connect(process.env.MONGODB_URI, options);
 
     // Only log in development
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       logger.info(`✅ MongoDB Connected: ${conn.connection.host}`);
       logger.info(`📊 Database: ${conn.connection.name}`);
       logger.info(

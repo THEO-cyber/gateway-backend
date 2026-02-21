@@ -23,18 +23,22 @@ const securityLogger = (req, res, next) => {
 // Enhanced error logging for security incidents
 const logSecurityEvent = (eventType, details, req) => {
   // Sanitize details to not expose attack patterns that could help attackers
-  const sanitizedDetails = process.env.NODE_ENV === 'development' 
-    ? details 
-    : { 
-        request: details.request,
-        method: details.method,
-        severity: "security"
-      };
+  const sanitizedDetails =
+    process.env.NODE_ENV === "development"
+      ? details
+      : {
+          request: details.request,
+          method: details.method,
+          severity: "security",
+        };
 
   logger.warn(`Security Event: ${eventType}`, {
     ...sanitizedDetails,
     ip: req?.ip,
-    userAgent: process.env.NODE_ENV === 'development' ? req?.get("User-Agent") : "Hidden",
+    userAgent:
+      process.env.NODE_ENV === "development"
+        ? req?.get("User-Agent")
+        : "Hidden",
     timestamp: new Date().toISOString(),
     severity: "security",
   });

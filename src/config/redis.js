@@ -50,9 +50,9 @@ class RedisClient {
 
       this.client.on("error", (error) => {
         this.isConnected = false;
-        
+
         // Only log detailed errors in development
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           logger.warn(`⚠️ Redis error: ${error.message}`);
         } else {
           logger.warn("⚠️ Redis connection issue");

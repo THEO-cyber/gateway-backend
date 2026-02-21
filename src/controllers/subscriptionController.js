@@ -52,7 +52,7 @@ exports.getPlans = async (req, res) => {
     });
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("[SubscriptionController] Error getting plans:", error);
     }
     res.status(500).json({
@@ -195,7 +195,7 @@ exports.subscribe = async (req, res) => {
     }
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("[SubscriptionController] Error subscribing:", error);
     }
     res.status(500).json({
@@ -293,7 +293,7 @@ exports.checkAccess = async (req, res) => {
     });
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("[SubscriptionController] Error checking access:", error);
     }
     res.status(500).json({
@@ -460,7 +460,7 @@ exports.getSubscriptionDetails = async (req, res) => {
     });
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("Error fetching subscription details:", error);
     }
     res.status(500).json({
@@ -510,7 +510,7 @@ exports.updateSubscriptionStatus = async (req, res) => {
     });
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("Error updating subscription status:", error);
     }
     res.status(500).json({
@@ -602,7 +602,7 @@ exports.getSubscriptionStats = async (req, res) => {
     });
   } catch (error) {
     // Log error securely
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("Error fetching subscription stats:", error);
     }
     res.status(500).json({

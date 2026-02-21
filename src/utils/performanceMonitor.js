@@ -25,7 +25,9 @@ class PerformanceMonitor {
         // Use proper prometheus-api-metrics initialization
         this.prometheusMiddleware = promClient();
       } catch (error) {
-        logger.warn("⚠️ Prometheus metrics initialization failed, continuing without metrics");
+        logger.warn(
+          "⚠️ Prometheus metrics initialization failed, continuing without metrics",
+        );
         this.prometheusMiddleware = null;
       }
     }
