@@ -11,6 +11,7 @@ const {
 } = require("../controllers/adminController");
 const { protect } = require("../middleware/auth");
 const { isAdmin } = require("../middleware/adminAuth");
+const { validateObjectId, sanitizeInput } = require("../middleware/validation");
 
 // Allow authenticated users to get their own profile
 router.get("/profile", protect, (req, res) => {
@@ -23,19 +24,18 @@ router.get("/profile", protect, (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to fetch profile",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch profile",
+      error: error.message,
+    });
   }
 });
 
 // All user management routes require admin authentication
 router.use(protect);
 router.use(isAdmin);
+router.use(sanitizeInput);
 
 router.get("/", getAllUsers);
 router.post("/", (req, res) =>
@@ -43,13 +43,13 @@ router.post("/", (req, res) =>
     success: false,
     error: "Create user via /auth/register",
     code: "NOT_IMPLEMENTED",
-  })
+  }),
 );
 router.get("/stats", getUserStats);
 router.post("/bulk-delete", bulkDeleteUsers);
 router.post("/export", exportUsers);
-router.get("/:id", getUserDetails);
-router.put("/:id", updateUser);
-router.delete("/:id", deleteUser);
+router.get("/:id", validateObjectId("id"), getUserDetails);
+router.put("/:id", validateObjectId("id"), updateUser);
+router.delete("/:id", validateObjectId("id"), deleteUser);
 
 module.exports = router;

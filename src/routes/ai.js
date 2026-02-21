@@ -3,9 +3,78 @@ const router = express.Router();
 const { chat, explain } = require("../controllers/aiController");
 const { protect } = require("../middleware/auth");
 const { isActiveUser } = require("../middleware/adminAuth");
+const {
+  requireAIAccess,
+  updateSubscriptionStatus,
+} = require("../middleware/subscriptionAuth");
 
-router.post("/chat", protect, isActiveUser, chat);
-router.post("/explain", protect, isActiveUser, explain);
+// Apply subscription status update
+router.use(protect);
+router.use(updateSubscriptionStatus);
+
+// AI routes with token limits
+router.post("/chat", isActiveUser, requireAIAccess, async (req, res) => {
+  try {
+    // Add AI usage info to response
+    const result = await chat(req, res);
+
+    // Add token info to response if not already sent
+    if (!res.headersSent && req.aiTokensRemaining !== undefined) {
+      const originalJson = res.json;
+      res.json = function (data) {
+        if (data && typeof data === "object") {
+          data.aiUsage = {
+            tokensUsed: req.aiTokensUsed,
+            tokensRemaining: req.aiTokensRemaining,
+            unlimited: req.user.accessLevel?.unlimited || false,
+          };
+        }
+        return originalJson.call(this, data);
+      };
+    }
+
+    return result;
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "AI chat failed",
+        error: error.message,
+      });
+    }
+  }
+});
+
+router.post("/explain", isActiveUser, requireAIAccess, async (req, res) => {
+  try {
+    const result = await explain(req, res);
+
+    // Add token info to response if not already sent
+    if (!res.headersSent && req.aiTokensRemaining !== undefined) {
+      const originalJson = res.json;
+      res.json = function (data) {
+        if (data && typeof data === "object") {
+          data.aiUsage = {
+            tokensUsed: req.aiTokensUsed,
+            tokensRemaining: req.aiTokensRemaining,
+            unlimited: req.user.accessLevel?.unlimited || false,
+          };
+        }
+        return originalJson.call(this, data);
+      };
+    }
+
+    return result;
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "AI explain failed",
+        error: error.message,
+      });
+    }
+  }
+});
 
 // @route   GET /api/ai/history
 // @desc    Get AI chat history for student

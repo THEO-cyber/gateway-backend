@@ -3,6 +3,10 @@ const router = express.Router();
 const { protect } = require("../middleware/auth");
 const { isAdmin } = require("../middleware/adminAuth");
 const {
+  requireTestAccess,
+  updateSubscriptionStatus,
+} = require("../middleware/subscriptionAuth");
+const {
   createTest,
   getAllTests,
   getTestById,
@@ -30,7 +34,7 @@ router.get("/enrolled", getEnrolledTests); // Student's enrolled tests
 router.get("/results", getStudentResults); // Must come before /:id
 router.get(
   "/:id/result-detail",
-  require("../controllers/enrollmentController").getResultDetail
+  require("../controllers/enrollmentController").getResultDetail,
 );
 router.get("/:id", getTestById);
 router.put("/:id", protect, isAdmin, updateTest);
@@ -40,12 +44,24 @@ router.delete("/:id", protect, isAdmin, deleteTest);
 router.post("/:id/questions", protect, isAdmin, addQuestions);
 router.get("/:id/questions", getTestQuestions);
 
-// Enrollment routes
-router.post("/:id/enroll", enrollInTest);
+// Enrollment routes (require test access subscription)
+router.post(
+  "/:id/enroll",
+  protect,
+  updateSubscriptionStatus,
+  requireTestAccess,
+  enrollInTest,
+);
 router.get("/:id/enrollments", protect, isAdmin, getTestEnrollments);
 
-// Submission routes
-router.post("/:id/submit", submitTest);
+// Submission routes (require test access subscription)
+router.post(
+  "/:id/submit",
+  protect,
+  updateSubscriptionStatus,
+  requireTestAccess,
+  submitTest,
+);
 router.get("/:id/submissions", protect, isAdmin, getTestSubmissions);
 router.get("/:id/submissions/:email", protect, isAdmin, getStudentSubmission);
 
