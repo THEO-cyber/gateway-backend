@@ -2,7 +2,7 @@ const logger = require("../utils/logger");
 
 const errorHandler = (err, req, res, next) => {
   // Only log full stack trace in development
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === "development") {
     logger.error(err.stack);
   } else {
     logger.error(`Error: ${err.message}`);
@@ -44,7 +44,10 @@ const errorHandler = (err, req, res, next) => {
   // Generic server error response
   res.status(err.statusCode || 500).json({
     success: false,
-    message: process.env.NODE_ENV === 'development' ? (err.message || "Server Error") : "Internal Server Error",
+    message:
+      process.env.NODE_ENV === "development"
+        ? err.message || "Server Error"
+        : "Internal Server Error",
   });
 };
 

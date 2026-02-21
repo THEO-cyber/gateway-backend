@@ -69,9 +69,9 @@ const httpServer = app.listen(PORT, "0.0.0.0", () => {
   logger.info(
     `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV || "development"} mode`,
   );
-  
+
   // Upload path configured securely
-  
+
   logger.info(`🔧 Performance monitoring enabled`);
   logger.info(`💚 Server is now ready to serve users!`);
   serverStartTime = new Date(); // Reset start time when server is actually ready
@@ -145,7 +145,7 @@ process.on("unhandledRejection", (err) => {
     logger.info("🔄 Production mode: Server will continue running");
     return;
   }
-  
+
   // Only log detailed errors in development
   logger.error(`💥 Unhandled Rejection: ${err.message}`);
   logger.error(`🔍 Stack trace: ${err.stack}`);

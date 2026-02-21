@@ -327,7 +327,7 @@ exports.forgotPassword = async (req, res) => {
     // Check for cooldown
     if (user.resetPasswordCooldown && user.resetPasswordCooldown > Date.now()) {
       const waitMins = Math.ceil(
-        (user.resetPasswordCooldown - Date.now()) / 60000
+        (user.resetPasswordCooldown - Date.now()) / 60000,
       );
       return res.status(429).json({
         success: false,
@@ -369,24 +369,25 @@ exports.forgotPassword = async (req, res) => {
       await user.save();
 
       // Log error securely without exposing details
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.error("Forgot password email error:", error);
       }
       res.status(500).json({
         success: false,
         message: "Email could not be sent",
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   } catch (error) {
     // Log error securely without exposing details
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error("Forgot password server error:", error);
     }
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -430,7 +431,7 @@ exports.verifyOTP = async (req, res) => {
         });
       } catch (e) {
         // Log error securely without exposing details
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           console.error("Failed to send lockout email:", e);
         }
       }
