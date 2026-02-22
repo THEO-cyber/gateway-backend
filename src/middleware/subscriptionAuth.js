@@ -76,18 +76,22 @@ const getOptimizedUserAccess = async (userId) => {
     return cached;
   }
 
-  // If not cached, fetch from database
-  const user = await User.findById(userId).lean();
+  // If not cached, fetch from database with optimized query
+  const user = await User.findById(userId)
+    .select('accessLevel aiTokens subscriptions')
+    .lean();
   if (!user) {
     throw new Error("User not found");
   }
 
-  // Get active subscriptions
+  // Get active subscriptions with single optimized query
   const activeSubscriptions = await Subscription.find({
     userId,
     status: "active",
     endDate: { $gt: new Date() },
-  }).lean();
+  })
+  .select('planType courserId features endDate')
+  .lean();
 
   // Build access data
   const userData = {

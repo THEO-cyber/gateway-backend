@@ -18,15 +18,37 @@ router.use(updateSubscriptionStatus);
  */
 router.get("/public", async (req, res) => {
   try {
-    // Always show basic course list
+    // Add caching headers for better performance
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes cache
+    
+    // Add pagination to reduce load
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+    
+    // Optimized course query with pagination
     const courses = await Course.find()
       .populate("department", "name code")
       .select("name code department description credits")
-      .sort({ name: 1 });
+      .sort({ name: 1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(); // Use lean() for better performance
+
+    // Get total count for pagination (only if requested)
+    const totalCount = req.query.includeCount === 'true' 
+      ? await Course.countDocuments()
+      : undefined;
 
     res.json({
       success: true,
       data: courses,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        hasMore: courses.length === limit
+      },
       message: "Subscribe to access course content and tests",
     });
   } catch (error) {
