@@ -19,13 +19,13 @@ router.use(updateSubscriptionStatus);
 router.get("/public", async (req, res) => {
   try {
     // Add caching headers for better performance
-    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes cache
-    
+    res.set("Cache-Control", "public, max-age=300"); // 5 minutes cache
+
     // Add pagination to reduce load
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const skip = (page - 1) * limit;
-    
+
     // Optimized course query with pagination
     const courses = await Course.find()
       .populate("department", "name code")
@@ -36,9 +36,10 @@ router.get("/public", async (req, res) => {
       .lean(); // Use lean() for better performance
 
     // Get total count for pagination (only if requested)
-    const totalCount = req.query.includeCount === 'true' 
-      ? await Course.countDocuments()
-      : undefined;
+    const totalCount =
+      req.query.includeCount === "true"
+        ? await Course.countDocuments()
+        : undefined;
 
     res.json({
       success: true,
@@ -47,7 +48,7 @@ router.get("/public", async (req, res) => {
         page,
         limit,
         totalCount,
-        hasMore: courses.length === limit
+        hasMore: courses.length === limit,
       },
       message: "Subscribe to access course content and tests",
     });

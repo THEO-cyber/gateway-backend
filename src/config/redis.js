@@ -11,8 +11,10 @@ class RedisClient {
 
   async connect() {
     // Skip Redis entirely if disabled - use hybrid cache
-    if (process.env.DISABLE_REDIS === 'true') {
-      logger.info("💾 Redis disabled - Using high-performance hybrid cache system");
+    if (process.env.DISABLE_REDIS === "true") {
+      logger.info(
+        "💾 Redis disabled - Using high-performance hybrid cache system",
+      );
       this.isConnected = null; // Set to null to indicate disabled state
       this.useHybridFallback = true;
       return false;
