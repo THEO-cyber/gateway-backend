@@ -216,9 +216,12 @@ class PerformanceMonitor {
           // Only warn about Redis if it's configured but failing, not if it's just not available
           if (
             component === "redis" &&
-            (status.error === "Redis client not connected" || status.status === "disabled")
+            (status.error === "Redis client not connected" ||
+              status.status === "disabled")
           ) {
-            logger.debug(`📡 ${component} not configured: ${status.error || status.message}`);
+            logger.debug(
+              `📡 ${component} not configured: ${status.error || status.message}`,
+            );
           } else {
             logger.warn(`⚠️ Health check warning for ${component}:`, status);
           }
@@ -253,11 +256,11 @@ class PerformanceMonitor {
   async checkRedisHealth() {
     try {
       // Skip Redis health check if disabled
-      if (process.env.DISABLE_REDIS === 'true') {
+      if (process.env.DISABLE_REDIS === "true") {
         return {
           healthy: true,
           status: "disabled",
-          message: "Redis disabled by configuration"
+          message: "Redis disabled by configuration",
         };
       }
 
@@ -390,8 +393,8 @@ class PerformanceMonitor {
     } catch (error) {
       return {
         healthy: false,
-        type: 'hybrid_cache',
-        error: error.message
+        type: "hybrid_cache",
+        error: error.message,
       };
     }
   }
@@ -404,8 +407,8 @@ class PerformanceMonitor {
     } catch (error) {
       return {
         healthy: false,
-        type: 'rate_limiter',
-        error: error.message
+        type: "rate_limiter",
+        error: error.message,
       };
     }
   }

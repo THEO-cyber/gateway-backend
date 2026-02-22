@@ -28,20 +28,25 @@ function initSocket(server, redisClient) {
   const setupAdapter = async () => {
     if (!redisClient || redisClient.useHybridFallback) {
       // Use enhanced memory adapter for better performance on free tier
-      const EnhancedMemoryAdapter = require('./config/enhancedMemoryAdapter');
+      const EnhancedMemoryAdapter = require("./config/enhancedMemoryAdapter");
       io.adapter(EnhancedMemoryAdapter);
-      
-      logger.info("📡 Socket.io using enhanced memory adapter (optimized for single-instance scaling)");
-      
+
+      logger.info(
+        "📡 Socket.io using enhanced memory adapter (optimized for single-instance scaling)",
+      );
+
       // Set up periodic cleanup for memory efficiency
       setInterval(() => {
         for (const [, namespace] of io._nsps) {
-          if (namespace.adapter && typeof namespace.adapter.cleanup === 'function') {
+          if (
+            namespace.adapter &&
+            typeof namespace.adapter.cleanup === "function"
+          ) {
             namespace.adapter.cleanup();
           }
         }
       }, 60000); // Cleanup every minute
-      
+
       return;
     }
 

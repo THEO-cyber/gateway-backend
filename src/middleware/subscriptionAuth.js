@@ -5,7 +5,11 @@ const logger = require("../utils/logger");
 
 // Helper function to check if Redis is available
 const isRedisAvailable = () => {
-  return process.env.DISABLE_REDIS !== 'true' && redisClient && redisClient.isConnected === true;
+  return (
+    process.env.DISABLE_REDIS !== "true" &&
+    redisClient &&
+    redisClient.isConnected === true
+  );
 };
 
 // Cache configuration
@@ -78,7 +82,7 @@ const getOptimizedUserAccess = async (userId) => {
 
   // If not cached, fetch from database with optimized query
   const user = await User.findById(userId)
-    .select('accessLevel aiTokens subscriptions')
+    .select("accessLevel aiTokens subscriptions")
     .lean();
   if (!user) {
     throw new Error("User not found");
@@ -90,8 +94,8 @@ const getOptimizedUserAccess = async (userId) => {
     status: "active",
     endDate: { $gt: new Date() },
   })
-  .select('planType courserId features endDate')
-  .lean();
+    .select("planType courserId features endDate")
+    .lean();
 
   // Build access data
   const userData = {
@@ -274,9 +278,10 @@ exports.requireAIAccess = async (req, res, next) => {
       // Update AI token usage with atomic operation
       const tokenCacheKey = getCacheKey("ai_tokens", userId);
       let currentTokens = userData.aiTokens.used;
-      
+
       if (isRedisAvailable()) {
-        currentTokens = (await redisClient.get(tokenCacheKey)) || userData.aiTokens.used;
+        currentTokens =
+          (await redisClient.get(tokenCacheKey)) || userData.aiTokens.used;
       }
 
       if (currentTokens >= userData.aiTokens.limit) {

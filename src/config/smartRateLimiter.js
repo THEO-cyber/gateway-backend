@@ -1,6 +1,6 @@
-const rateLimit = require('express-rate-limit');
-const NodeCache = require('node-cache');
-const logger = require('../utils/logger');
+const rateLimit = require("express-rate-limit");
+const NodeCache = require("node-cache");
+const logger = require("../utils/logger");
 
 /**
  * Enhanced Rate Limiter for free tier hosting without Redis
@@ -13,17 +13,19 @@ class SmartRateLimiter {
     this.memoryStore = new NodeCache({
       stdTTL: 900, // 15 minutes default
       checkperiod: 60, // Cleanup every minute
-      useClones: false
+      useClones: false,
     });
 
     // Track rate limiting statistics
     this.stats = {
       blocked: 0,
       allowed: 0,
-      errors: 0
+      errors: 0,
     };
 
-    logger.info('🛡️ Smart rate limiter initialized - Memory-based protection active');
+    logger.info(
+      "🛡️ Smart rate limiter initialized - Memory-based protection active",
+    );
   }
 
   /**
@@ -35,14 +37,14 @@ class SmartRateLimiter {
         try {
           const current = this.memoryStore.get(key) || 0;
           const newValue = current + 1;
-          
+
           // Set with TTL if it's a new key
           if (current === 0) {
             this.memoryStore.set(key, newValue, 900); // 15 minutes
           } else {
             this.memoryStore.set(key, newValue);
           }
-          
+
           callback(null, newValue, 900000); // Return count and TTL in ms
         } catch (error) {
           this.stats.errors++;
@@ -63,7 +65,7 @@ class SmartRateLimiter {
 
       resetAll: () => {
         this.memoryStore.flushAll();
-      }
+      },
     };
   }
 
@@ -77,7 +79,7 @@ class SmartRateLimiter {
       message: options.message || {
         success: false,
         message: "Too many requests from this IP, please try again later.",
-        retryAfter: Math.ceil((options.windowMs || 900000) / 1000)
+        retryAfter: Math.ceil((options.windowMs || 900000) / 1000),
       },
       standardHeaders: true,
       legacyHeaders: false,
@@ -91,15 +93,17 @@ class SmartRateLimiter {
       },
       skip: (req) => {
         // Skip rate limiting for health checks and static assets
-        return req.path === '/health' || 
-               req.path === '/metrics' || 
-               req.path.startsWith('/static/');
+        return (
+          req.path === "/health" ||
+          req.path === "/metrics" ||
+          req.path.startsWith("/static/")
+        );
       },
       handler: (req, res) => {
         this.stats.blocked++;
         logger.warn(`🚫 Rate limit exceeded for ${req.ip} on ${req.path}`);
         res.status(429).json(config.message);
-      }
+      },
     };
 
     const limiter = rateLimit(config);
@@ -125,7 +129,7 @@ class SmartRateLimiter {
       message: {
         success: false,
         message: "Too many attempts. Please wait before trying again.",
-        retryAfter: Math.ceil((options.windowMs || 300000) / 1000)
+        retryAfter: Math.ceil((options.windowMs || 300000) / 1000),
       },
       standardHeaders: true,
       legacyHeaders: false,
@@ -139,9 +143,11 @@ class SmartRateLimiter {
       },
       handler: (req, res) => {
         this.stats.blocked++;
-        logger.warn(`🔴 Strict rate limit exceeded for ${req.ip} on ${req.path}`);
+        logger.warn(
+          `🔴 Strict rate limit exceeded for ${req.ip} on ${req.path}`,
+        );
         res.status(429).json(config.message);
-      }
+      },
     };
 
     return rateLimit(config);
@@ -183,7 +189,7 @@ class SmartRateLimiter {
         return res.status(429).json({
           success: false,
           message: "Too many requests. Please slow down.",
-          retryAfter: Math.ceil((userLimit.resetTime - now) / 1000)
+          retryAfter: Math.ceil((userLimit.resetTime - now) / 1000),
         });
       }
 
@@ -197,14 +203,16 @@ class SmartRateLimiter {
    */
   cleanup() {
     const before = this.memoryStore.keys().length;
-    
+
     // NodeCache automatically handles TTL cleanup, but we can force it
     this.memoryStore.flushStats();
-    
+
     const after = this.memoryStore.keys().length;
-    
+
     if (before !== after) {
-      logger.debug(`🧹 Rate limiter cleanup: ${before - after} expired entries removed`);
+      logger.debug(
+        `🧹 Rate limiter cleanup: ${before - after} expired entries removed`,
+      );
     }
   }
 
@@ -216,7 +224,7 @@ class SmartRateLimiter {
       ...this.stats,
       activeKeys: this.memoryStore.keys().length,
       memoryUsage: process.memoryUsage().heapUsed,
-      type: 'smart_memory_limiter'
+      type: "smart_memory_limiter",
     };
   }
 
@@ -226,22 +234,25 @@ class SmartRateLimiter {
   healthCheck() {
     try {
       const stats = this.getStats();
-      
+
       return {
         healthy: true,
-        type: 'smart_rate_limiter',
+        type: "smart_rate_limiter",
         activeKeys: stats.activeKeys,
         blocked: stats.blocked,
         allowed: stats.allowed,
-        hitRate: stats.blocked + stats.allowed > 0 
-          ? ((stats.allowed / (stats.blocked + stats.allowed)) * 100).toFixed(2) + '%'
-          : '100%'
+        hitRate:
+          stats.blocked + stats.allowed > 0
+            ? ((stats.allowed / (stats.blocked + stats.allowed)) * 100).toFixed(
+                2,
+              ) + "%"
+            : "100%",
       };
     } catch (error) {
       return {
         healthy: false,
-        type: 'smart_rate_limiter',
-        error: error.message
+        type: "smart_rate_limiter",
+        error: error.message,
       };
     }
   }
@@ -251,8 +262,11 @@ class SmartRateLimiter {
 const smartLimiter = new SmartRateLimiter();
 
 // Periodic cleanup
-setInterval(() => {
-  smartLimiter.cleanup();
-}, 5 * 60 * 1000); // Every 5 minutes
+setInterval(
+  () => {
+    smartLimiter.cleanup();
+  },
+  5 * 60 * 1000,
+); // Every 5 minutes
 
 module.exports = smartLimiter;

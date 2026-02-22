@@ -1,5 +1,5 @@
-const { Adapter } = require('socket.io-adapter');
-const logger = require('../utils/logger');
+const { Adapter } = require("socket.io-adapter");
+const logger = require("../utils/logger");
 
 /**
  * Enhanced Memory Adapter for Socket.io
@@ -17,10 +17,10 @@ class EnhancedMemoryAdapter extends Adapter {
       connections: 0,
       rooms: 0,
       broadcasts: 0,
-      errors: 0
+      errors: 0,
     };
-    
-    logger.info('🔌 Enhanced Memory Adapter initialized for Socket.io scaling');
+
+    logger.info("🔌 Enhanced Memory Adapter initialized for Socket.io scaling");
   }
 
   addAll(id, rooms) {
@@ -31,7 +31,7 @@ class EnhancedMemoryAdapter extends Adapter {
 
     for (const room of rooms) {
       this.sids.get(id).add(room);
-      
+
       if (!this.rooms.has(room)) {
         this.rooms.set(room, new Set());
         this.stats.rooms++;
@@ -47,7 +47,7 @@ class EnhancedMemoryAdapter extends Adapter {
 
     if (this.rooms.has(room)) {
       this.rooms.get(room).delete(id);
-      
+
       if (this.rooms.get(room).size === 0) {
         this.rooms.delete(room);
         this.stats.rooms--;
@@ -63,7 +63,7 @@ class EnhancedMemoryAdapter extends Adapter {
     for (const room of this.sids.get(id)) {
       if (this.rooms.has(room)) {
         this.rooms.get(room).delete(id);
-        
+
         if (this.rooms.get(room).size === 0) {
           this.rooms.delete(room);
           this.stats.rooms--;
@@ -77,14 +77,14 @@ class EnhancedMemoryAdapter extends Adapter {
 
   broadcast(packet, opts) {
     this.stats.broadcasts++;
-    
+
     const rooms = opts.rooms;
     const except = opts.except || new Set();
     const flags = opts.flags || {};
     const packetOpts = {
       preEncoded: true,
       volatile: flags.volatile,
-      compress: flags.compress
+      compress: flags.compress,
     };
 
     const ids = new Set();
@@ -95,7 +95,7 @@ class EnhancedMemoryAdapter extends Adapter {
 
         for (const id of this.rooms.get(room)) {
           if (ids.has(id) || except.has(id)) continue;
-          
+
           const socket = this.nsp.sockets.get(id);
           if (socket) {
             ids.add(id);
@@ -106,7 +106,7 @@ class EnhancedMemoryAdapter extends Adapter {
     } else {
       for (const [id] of this.sids) {
         if (except.has(id)) continue;
-        
+
         const socket = this.nsp.sockets.get(id);
         if (socket) {
           socket.packet(packet, packetOpts);
@@ -151,8 +151,8 @@ class EnhancedMemoryAdapter extends Adapter {
       ...this.stats,
       activeConnections: this.sids.size,
       activeRooms: this.rooms.size,
-      type: 'enhanced_memory',
-      memoryUsage: process.memoryUsage()
+      type: "enhanced_memory",
+      memoryUsage: process.memoryUsage(),
     };
   }
 
@@ -161,7 +161,7 @@ class EnhancedMemoryAdapter extends Adapter {
    */
   cleanup() {
     let cleaned = 0;
-    
+
     for (const [room, sids] of this.rooms.entries()) {
       // Remove disconnected sockets from rooms
       for (const sid of sids) {
@@ -170,7 +170,7 @@ class EnhancedMemoryAdapter extends Adapter {
           cleaned++;
         }
       }
-      
+
       // Remove empty rooms
       if (sids.size === 0) {
         this.rooms.delete(room);
@@ -179,7 +179,9 @@ class EnhancedMemoryAdapter extends Adapter {
     }
 
     if (cleaned > 0) {
-      logger.debug(`🧹 Socket.io cleanup: removed ${cleaned} orphaned connections`);
+      logger.debug(
+        `🧹 Socket.io cleanup: removed ${cleaned} orphaned connections`,
+      );
     }
   }
 
@@ -189,21 +191,21 @@ class EnhancedMemoryAdapter extends Adapter {
   healthCheck() {
     try {
       const stats = this.getStats();
-      
+
       return {
         healthy: true,
-        type: 'enhanced_memory_adapter',
+        type: "enhanced_memory_adapter",
         connections: stats.activeConnections,
         rooms: stats.activeRooms,
         broadcasts: stats.broadcasts,
-        memoryUsage: stats.memoryUsage.heapUsed
+        memoryUsage: stats.memoryUsage.heapUsed,
       };
     } catch (error) {
       this.stats.errors++;
       return {
         healthy: false,
-        type: 'enhanced_memory_adapter',
-        error: error.message
+        type: "enhanced_memory_adapter",
+        error: error.message,
       };
     }
   }

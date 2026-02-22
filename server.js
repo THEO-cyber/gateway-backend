@@ -23,7 +23,7 @@ const initializeServices = async () => {
     logger.info("✅ Database connection established");
 
     // Connect to Redis only if not disabled
-    if (process.env.DISABLE_REDIS !== 'true') {
+    if (process.env.DISABLE_REDIS !== "true") {
       await redisClient.connect();
       logger.info("✅ Redis connection established");
     } else {
@@ -104,7 +104,8 @@ httpServer.on("clientError", (error, socket) => {
 // Initialize socket.io with Redis adapter for scaling
 const { initSocket } = require("./src/socket");
 // Pass null if Redis is disabled
-const socketRedisClient = process.env.DISABLE_REDIS === 'true' ? null : redisClient;
+const socketRedisClient =
+  process.env.DISABLE_REDIS === "true" ? null : redisClient;
 initSocket(httpServer, socketRedisClient);
 
 // Graceful shutdown handling
@@ -117,7 +118,7 @@ const gracefulShutdown = async (signal) => {
 
     try {
       // Close Redis connection only if not disabled
-      if (process.env.DISABLE_REDIS !== 'true' && redisClient) {
+      if (process.env.DISABLE_REDIS !== "true" && redisClient) {
         await redisClient.disconnect();
         logger.info("📴 Redis connection closed");
       }
@@ -241,8 +242,12 @@ if (process.env.NODE_ENV === "production") {
         }
       }
 
-      // Check Redis connection if available and not disabled  
-      if (process.env.DISABLE_REDIS !== 'true' && redisClient && redisClient.isConnected === false) {
+      // Check Redis connection if available and not disabled
+      if (
+        process.env.DISABLE_REDIS !== "true" &&
+        redisClient &&
+        redisClient.isConnected === false
+      ) {
         logger.warn("⚠️ Redis disconnected, server continuing without cache");
       }
     } catch (error) {
