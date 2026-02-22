@@ -204,6 +204,8 @@ class PerformanceMonitor {
       const health = {
         database: await this.checkDatabaseHealth(),
         redis: await this.checkRedisHealth(),
+        cache: await this.checkCacheHealth(),
+        rateLimiter: await this.checkRateLimiterHealth(),
         memory: this.checkMemoryHealth(),
         timestamp: new Date().toISOString(),
       };
@@ -214,9 +216,9 @@ class PerformanceMonitor {
           // Only warn about Redis if it's configured but failing, not if it's just not available
           if (
             component === "redis" &&
-            status.error === "Redis client not connected"
+            (status.error === "Redis client not connected" || status.status === "disabled")
           ) {
-            logger.debug(`📡 ${component} not configured: ${status.error}`);
+            logger.debug(`📡 ${component} not configured: ${status.error || status.message}`);
           } else {
             logger.warn(`⚠️ Health check warning for ${component}:`, status);
           }
@@ -378,6 +380,34 @@ class PerformanceMonitor {
     }
 
     return recommendations;
+  }
+
+  // Check hybrid cache health
+  async checkCacheHealth() {
+    try {
+      const hybridCache = require("../config/hybridCache");
+      return await hybridCache.healthCheck();
+    } catch (error) {
+      return {
+        healthy: false,
+        type: 'hybrid_cache',
+        error: error.message
+      };
+    }
+  }
+
+  // Check rate limiter health
+  async checkRateLimiterHealth() {
+    try {
+      const smartLimiter = require("../config/smartRateLimiter");
+      return smartLimiter.healthCheck();
+    } catch (error) {
+      return {
+        healthy: false,
+        type: 'rate_limiter',
+        error: error.message
+      };
+    }
   }
 }
 
