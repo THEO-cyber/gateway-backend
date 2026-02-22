@@ -24,11 +24,24 @@ function initSocket(server, redisClient) {
     allowEIO3: true,
   });
 
-  // Setup Redis adapter for horizontal scaling
-  // Set up Redis adapter asynchronously after Redis connects
-  const setupRedisAdapter = async () => {
-    if (!redisClient) {
-      logger.info("📡 Socket.io using memory adapter (Redis not configured)");
+  // Setup Redis adapter for horizontal scaling or enhanced memory adapter
+  const setupAdapter = async () => {
+    if (!redisClient || redisClient.useHybridFallback) {
+      // Use enhanced memory adapter for better performance on free tier
+      const EnhancedMemoryAdapter = require('./config/enhancedMemoryAdapter');
+      io.adapter(EnhancedMemoryAdapter);
+      
+      logger.info("📡 Socket.io using enhanced memory adapter (optimized for single-instance scaling)");
+      
+      // Set up periodic cleanup for memory efficiency
+      setInterval(() => {
+        for (const [, namespace] of io._nsps) {
+          if (namespace.adapter && typeof namespace.adapter.cleanup === 'function') {
+            namespace.adapter.cleanup();
+          }
+        }
+      }, 60000); // Cleanup every minute
+      
       return;
     }
 
@@ -82,7 +95,7 @@ function initSocket(server, redisClient) {
   };
 
   // Setup Redis adapter asynchronously
-  setupRedisAdapter();
+  setupAdapter();
 
   // Connection handling with performance monitoring
   io.on("connection", (socket) => {

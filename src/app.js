@@ -58,6 +58,9 @@ let rateLimiterMiddleware = (req, res, next) => {
 
 // Function to setup Redis-based rate limiter
 const setupRateLimiter = () => {
+  // Use smart rate limiter for better performance without Redis
+  const smartLimiter = require('./config/smartRateLimiter');
+  
   const config = {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
     max: parseInt(process.env.RATE_LIMIT_MAX) || 500,
@@ -67,7 +70,7 @@ const setupRateLimiter = () => {
     skip: (req) => req.path === "/health" || req.path === "/metrics",
   };
 
-  if (redisClient && redisClient.isConnected) {
+  if (redisClient && redisClient.isConnected === true) {
     try {
       const { RedisStore } = require("rate-limit-redis");
       config.store = new RedisStore({
@@ -75,21 +78,26 @@ const setupRateLimiter = () => {
       });
 
       const redisLimiter = rateLimit(config);
-
+      
       // Replace the middleware function
       rateLimiterMiddleware = (req, res, next) => {
         return redisLimiter(req, res, next);
       };
 
-      logger.info("✅ Rate limiter upgraded to Redis store");
+      logger.info("✅ Rate limiter using Redis store");
     } catch (error) {
       logger.warn(
-        "⚠️ Rate limiter Redis setup failed, using memory store:",
+        "⚠️ Redis rate limiter setup failed, using smart memory limiter:",
         error.message,
       );
+      
+      // Fallback to smart memory limiter
+      rateLimiterMiddleware = smartLimiter.createGeneralLimiter(config);
     }
   } else {
-    logger.info("📡 Rate limiter using memory store (Redis not available)");
+    // Use smart memory-based rate limiter (better than default memory store)
+    rateLimiterMiddleware = smartLimiter.createGeneralLimiter(config);
+    logger.info("🛡️ Rate limiter using smart memory store (optimized for single-instance)");
   }
 };
 
