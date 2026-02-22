@@ -3,6 +3,11 @@ const Subscription = require("../models/Subscription");
 const redisClient = require("../config/redis");
 const logger = require("../utils/logger");
 
+// Helper function to check if Redis is available
+const isRedisAvailable = () => {
+  return process.env.DISABLE_REDIS !== 'true' && redisClient && redisClient.isConnected;
+};
+
 // Cache configuration
 const CACHE_TTL = {
   USER_SUBSCRIPTION: 300, // 5 minutes
@@ -16,6 +21,10 @@ const getCacheKey = (type, userId, extra = "") => {
 };
 
 const getCachedUserAccess = async (userId) => {
+  if (!isRedisAvailable()) {
+    return null; // Skip cache if Redis is disabled
+  }
+
   const cacheKey = getCacheKey("user_access", userId);
 
   try {
@@ -32,6 +41,10 @@ const getCachedUserAccess = async (userId) => {
 };
 
 const setCachedUserAccess = async (userId, userData) => {
+  if (!isRedisAvailable()) {
+    return; // Skip cache if Redis is disabled
+  }
+
   const cacheKey = getCacheKey("user_access", userId);
 
   try {
@@ -43,6 +56,10 @@ const setCachedUserAccess = async (userId, userData) => {
 };
 
 const invalidateUserCache = async (userId) => {
+  if (!isRedisAvailable()) {
+    return; // Skip cache if Redis is disabled
+  }
+
   try {
     await redisClient.clearPattern(`*:${userId}*`);
     logger.debug(`Invalidated cache for user: ${userId}`);
@@ -252,8 +269,11 @@ exports.requireAIAccess = async (req, res, next) => {
     if (userData.aiTokens.used < userData.aiTokens.limit) {
       // Update AI token usage with atomic operation
       const tokenCacheKey = getCacheKey("ai_tokens", userId);
-      const currentTokens =
-        (await redisClient.get(tokenCacheKey)) || userData.aiTokens.used;
+      let currentTokens = userData.aiTokens.used;
+      
+      if (isRedisAvailable()) {
+        currentTokens = (await redisClient.get(tokenCacheKey)) || userData.aiTokens.used;
+      }
 
       if (currentTokens >= userData.aiTokens.limit) {
         return res.status(403).json({
@@ -274,10 +294,13 @@ exports.requireAIAccess = async (req, res, next) => {
       }
 
       // Increment tokens in cache and schedule DB update
-      const newTokenCount = await redisClient.incr(
-        tokenCacheKey,
-        CACHE_TTL.AI_TOKENS,
-      );
+      let newTokenCount = currentTokens + 1;
+      if (isRedisAvailable()) {
+        newTokenCount = await redisClient.incr(
+          tokenCacheKey,
+          CACHE_TTL.AI_TOKENS,
+        );
+      }
 
       // Schedule async DB update (non-blocking)
       setImmediate(async () => {
@@ -459,10 +482,13 @@ exports.checkExpiredSubscriptions = async (req, res, next) => {
   try {
     // Background jobs now handle heavy operations
     // This middleware just ensures cache invalidation for expired items
-    const lastCheck = await redisClient.get("last_expiry_check");
+    let lastCheck = null;
+    if (isRedisAvailable()) {
+      lastCheck = await redisClient.get("last_expiry_check");
+    }
     const now = Date.now();
 
-    if (!lastCheck || now - lastCheck > 60000) {
+    if (isRedisAvailable() && (!lastCheck || now - lastCheck > 60000)) {
       // Check every minute
       await redisClient.set("last_expiry_check", now, 60);
 
