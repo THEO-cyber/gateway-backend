@@ -250,6 +250,15 @@ class PerformanceMonitor {
 
   async checkRedisHealth() {
     try {
+      // Skip Redis health check if disabled
+      if (process.env.DISABLE_REDIS === 'true') {
+        return {
+          healthy: true,
+          status: "disabled",
+          message: "Redis disabled by configuration"
+        };
+      }
+
       const redisClient = require("../config/redis");
 
       // Check if Redis client exists and is connected

@@ -22,9 +22,13 @@ const initializeServices = async () => {
     await connectDB();
     logger.info("✅ Database connection established");
 
-    // Connect to Redis
-    await redisClient.connect();
-    logger.info("✅ Redis connection established");
+    // Connect to Redis only if not disabled
+    if (process.env.DISABLE_REDIS !== 'true') {
+      await redisClient.connect();
+      logger.info("✅ Redis connection established");
+    } else {
+      logger.info("💾 Redis disabled - Server starting without caching");
+    }
 
     // Schedule background jobs
     scheduleRecurringJobs();
@@ -99,7 +103,9 @@ httpServer.on("clientError", (error, socket) => {
 
 // Initialize socket.io with Redis adapter for scaling
 const { initSocket } = require("./src/socket");
-initSocket(httpServer, redisClient);
+// Pass null if Redis is disabled
+const socketRedisClient = process.env.DISABLE_REDIS === 'true' ? null : redisClient;
+initSocket(httpServer, socketRedisClient);
 
 // Graceful shutdown handling
 const gracefulShutdown = async (signal) => {
@@ -110,9 +116,11 @@ const gracefulShutdown = async (signal) => {
     logger.info("🔌 HTTP server closed");
 
     try {
-      // Close Redis connection
-      await redisClient.disconnect();
-      logger.info("📴 Redis connection closed");
+      // Close Redis connection only if not disabled
+      if (process.env.DISABLE_REDIS !== 'true' && redisClient) {
+        await redisClient.disconnect();
+        logger.info("📴 Redis connection closed");
+      }
 
       // Close MongoDB connection
       const mongoose = require("mongoose");
@@ -233,8 +241,8 @@ if (process.env.NODE_ENV === "production") {
         }
       }
 
-      // Check Redis connection if available
-      if (redisClient && !redisClient.isConnected) {
+      // Check Redis connection if available and not disabled
+      if (process.env.DISABLE_REDIS !== 'true' && redisClient && !redisClient.isConnected) {
         logger.warn("⚠️ Redis disconnected, server continuing without cache");
       }
     } catch (error) {
