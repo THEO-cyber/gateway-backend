@@ -11,6 +11,7 @@ class RedisClient {
     // Skip Redis entirely if disabled
     if (process.env.DISABLE_REDIS === 'true') {
       logger.info("💾 Redis disabled - Server running without caching");
+      this.isConnected = null; // Set to null to indicate disabled state
       return false;
     }
 

@@ -5,7 +5,7 @@ const logger = require("../utils/logger");
 
 // Helper function to check if Redis is available
 const isRedisAvailable = () => {
-  return process.env.DISABLE_REDIS !== 'true' && redisClient && redisClient.isConnected;
+  return process.env.DISABLE_REDIS !== 'true' && redisClient && redisClient.isConnected === true;
 };
 
 // Cache configuration

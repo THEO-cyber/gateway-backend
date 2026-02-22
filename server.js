@@ -241,8 +241,8 @@ if (process.env.NODE_ENV === "production") {
         }
       }
 
-      // Check Redis connection if available and not disabled
-      if (process.env.DISABLE_REDIS !== 'true' && redisClient && !redisClient.isConnected) {
+      // Check Redis connection if available and not disabled  
+      if (process.env.DISABLE_REDIS !== 'true' && redisClient && redisClient.isConnected === false) {
         logger.warn("⚠️ Redis disconnected, server continuing without cache");
       }
     } catch (error) {
