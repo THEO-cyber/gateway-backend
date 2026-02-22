@@ -193,10 +193,10 @@ class PerformanceMonitor {
 
   // Health monitoring
   startHealthMonitoring() {
-    // Check system health every 30 seconds
+    // Check system health every 60 seconds (reduced frequency)
     setInterval(async () => {
       await this.performHealthCheck();
-    }, 30000);
+    }, 60000);
   }
 
   async performHealthCheck() {

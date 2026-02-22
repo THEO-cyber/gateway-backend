@@ -13,11 +13,11 @@ const connectDB = async () => {
         parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 5000,
 
       // Connection behavior
-      connectTimeoutMS: parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
-      socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 45000,
+      connectTimeoutMS: parseInt(process.env.DB_CONNECT_TIMEOUT) || 5000, // Reduced from 10s
+      socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 20000, // Reduced from 45s
 
       // Topology options
-      heartbeatFrequencyMS: 10000,
+      heartbeatFrequencyMS: 30000, // Increased from 10s to reduce network calls
       retryWrites: true,
       retryReads: true,
 
