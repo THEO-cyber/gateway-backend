@@ -10,6 +10,42 @@ const NKWAPAY_WEBHOOK_SECRET = process.env.NKWAPAY_WEBHOOK_SECRET;
 // Legacy payment fee removed - now using subscription-based pricing
 // const PAYMENT_FEE = parseInt(process.env.PAYMENT_FEE) || 1000;
 
+const SUCCESS_STATUSES = new Set([
+  "successful",
+  "completed",
+  "success",
+  "succeeded",
+  "paid",
+]);
+
+const FAILURE_STATUSES = new Set([
+  "failed",
+  "cancelled",
+  "canceled",
+  "declined",
+  "error",
+]);
+
+function normalizeStatus(status) {
+  if (!status) return "";
+  return String(status).trim().toLowerCase();
+}
+
+function getWebhookField(payload, ...paths) {
+  for (const path of paths) {
+    const value = path
+      .split(".")
+      .reduce(
+        (acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined),
+        payload,
+      );
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 // Generate unique transaction ID
 function generateTransactionId() {
   const timestamp = Date.now();
@@ -20,7 +56,7 @@ function generateTransactionId() {
 // Format phone number for Cameroon
 function formatPhoneNumber(phone) {
   // Check if phone is null, undefined, or empty
-  if (!phone || typeof phone !== 'string') {
+  if (!phone || typeof phone !== "string") {
     throw new Error("Phone number is required and must be a valid string");
   }
 
@@ -80,31 +116,55 @@ async function checkPaymentStatus(transactionId) {
       };
     }
 
-    // Check status with Nkwa Pay if we have their transaction ID
-    if (payment.nkwaTransactionId) {
+    // Check status with Nkwa Pay (provider ID preferred, merchant reference fallback)
+    const statusLookupId = payment.nkwaTransactionId || transactionId;
+
+    if (statusLookupId) {
       const response = await axios.get(
-        `${NKWAPAY_BASE_URL}/payments/${payment.nkwaTransactionId}`,
+        `${NKWAPAY_BASE_URL}/payments/${statusLookupId}`,
         {
           headers: { "X-API-KEY": NKWAPAY_API_KEY },
           timeout: 10000,
         },
       );
 
+      const responseData = response.data || {};
+      const nestedData = responseData.data || {};
+
       // Update payment status based on Nkwa Pay response
-      const nkwaStatus = response.data.status;
+      const nkwaStatus =
+        responseData.status ||
+        nestedData.status ||
+        responseData.paymentStatus ||
+        nestedData.paymentStatus;
+      const normalizedStatus = normalizeStatus(nkwaStatus);
+
+      const returnedTransactionId =
+        responseData.transactionId ||
+        responseData.id ||
+        nestedData.transactionId ||
+        nestedData.id;
+
+      if (!payment.nkwaTransactionId && returnedTransactionId) {
+        payment.nkwaTransactionId = returnedTransactionId;
+      }
+
       let newStatus = payment.status;
 
-      if (nkwaStatus === "successful" || nkwaStatus === "completed") {
+      if (SUCCESS_STATUSES.has(normalizedStatus)) {
         newStatus = "success";
         payment.completedAt = new Date();
-      } else if (nkwaStatus === "failed" || nkwaStatus === "cancelled") {
+      } else if (FAILURE_STATUSES.has(normalizedStatus)) {
         newStatus = "failed";
         payment.completedAt = new Date();
-        payment.errorMessage = response.data.message || "Payment failed";
+        payment.errorMessage =
+          responseData.message || nestedData.message || "Payment failed";
       }
 
       if (newStatus !== payment.status) {
         payment.status = newStatus;
+        await payment.save();
+      } else if (!payment.nkwaTransactionId && returnedTransactionId) {
         await payment.save();
       }
     }
@@ -133,27 +193,60 @@ async function processWebhook(payload, signature) {
   try {
     // Verify webhook signature if secret is configured
     if (NKWAPAY_WEBHOOK_SECRET && signature) {
+      const providedSignature = String(signature)
+        .replace(/^sha256=/i, "")
+        .trim();
       const expectedSignature = crypto
         .createHmac("sha256", NKWAPAY_WEBHOOK_SECRET)
         .update(JSON.stringify(payload))
         .digest("hex");
 
-      if (signature !== expectedSignature) {
+      if (providedSignature !== expectedSignature) {
         throw new Error("Invalid webhook signature");
       }
     }
 
-    const { reference, status, transactionId, amount, phoneNumber } = payload;
+    const reference = getWebhookField(
+      payload,
+      "reference",
+      "data.reference",
+      "data.metadata.reference",
+      "metadata.reference",
+      "merchantReference",
+      "externalReference",
+    );
+    const transactionId = getWebhookField(
+      payload,
+      "transactionId",
+      "id",
+      "data.transactionId",
+      "data.id",
+      "paymentId",
+    );
+    const rawStatus = getWebhookField(
+      payload,
+      "status",
+      "data.status",
+      "paymentStatus",
+    );
+    const normalizedStatus = normalizeStatus(rawStatus);
 
-    if (!reference) {
-      throw new Error("Missing transaction reference in webhook");
+    if (!reference && !transactionId) {
+      throw new Error("Missing payment reference/transaction ID in webhook");
     }
 
-    // Find payment by our transaction ID (reference)
-    const payment = await Payment.findByTransactionId(reference);
+    // Find payment by our transaction ID (reference) first, then provider ID fallback
+    let payment = null;
+    if (reference) {
+      payment = await Payment.findByTransactionId(reference);
+    }
+    if (!payment && transactionId) {
+      payment = await Payment.findOne({ nkwaTransactionId: transactionId });
+    }
+
     if (!payment) {
       console.warn(
-        `[NkwaPayService] Webhook received for unknown payment: ${reference}`,
+        `[NkwaPayService] Webhook received for unknown payment: ${reference || transactionId}`,
       );
       return { success: false, message: "Payment not found" };
     }
@@ -169,24 +262,29 @@ async function processWebhook(payload, signature) {
     }
 
     // Update payment status based on webhook
-    if (status === "successful" || status === "completed") {
+    if (SUCCESS_STATUSES.has(normalizedStatus)) {
       await payment.markAsSuccessful(payload);
-      console.log(`[NkwaPayService] Payment successful: ${reference}`);
-    } else if (status === "failed" || status === "cancelled") {
-      await payment.markAsFailed(payload.message || "Payment failed", status);
-      console.log(`[NkwaPayService] Payment failed: ${reference}`);
+      console.log(
+        `[NkwaPayService] Payment successful: ${payment.transactionId}`,
+      );
+    } else if (FAILURE_STATUSES.has(normalizedStatus)) {
+      await payment.markAsFailed(
+        payload.message || "Payment failed",
+        normalizedStatus,
+      );
+      console.log(`[NkwaPayService] Payment failed: ${payment.transactionId}`);
     } else {
       // Update status but don't mark as completed
       payment.status = "processing";
       await payment.save();
       console.log(
-        `[NkwaPayService] Payment status updated: ${reference} - ${status}`,
+        `[NkwaPayService] Payment status updated: ${payment.transactionId} - ${rawStatus}`,
       );
     }
 
     return {
       success: true,
-      transactionId: reference,
+      transactionId: payment.transactionId,
       status: payment.status,
     };
   } catch (err) {

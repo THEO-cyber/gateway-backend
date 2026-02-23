@@ -10,6 +10,97 @@ const User = require("../models/User");
 const logger = require("../utils/logger");
 const { processSubscriptionWebhook } = require("./subscriptionController");
 
+const TERMINAL_SUCCESS = new Set([
+  "success",
+  "successful",
+  "completed",
+  "paid",
+  "succeeded",
+]);
+const TERMINAL_FAILURE = new Set(["failed", "cancelled", "canceled", "error"]);
+
+const normalizePaymentStatus = (status) =>
+  status ? String(status).trim().toLowerCase() : "";
+
+const mapToInternalStatus = (status) => {
+  const normalized = normalizePaymentStatus(status);
+  if (TERMINAL_SUCCESS.has(normalized)) return "success";
+  if (TERMINAL_FAILURE.has(normalized)) return "failed";
+  return normalized || "processing";
+};
+
+const syncPaymentEntitlements = async (payment, statusOverride = null) => {
+  if (!payment || !payment.userId) return;
+
+  const internalStatus = mapToInternalStatus(statusOverride || payment.status);
+
+  if (
+    payment.metadata &&
+    payment.metadata.isSubscriptionPayment &&
+    payment.metadata.subscriptionId
+  ) {
+    const subscriptionStatus =
+      internalStatus === "success" ? "completed" : "failed";
+
+    if (internalStatus === "success" || internalStatus === "failed") {
+      await processSubscriptionWebhook(
+        payment.metadata.subscriptionId,
+        subscriptionStatus,
+        {
+          paymentId: payment._id,
+          transactionId: payment.transactionId,
+          amount: payment.amount,
+        },
+      );
+    }
+
+    return;
+  }
+
+  if (internalStatus === "success") {
+    const user = await User.findById(payment.userId);
+    if (user && user.paymentStatus !== "completed") {
+      user.paymentStatus = "completed";
+      user.paymentDate = new Date();
+      user.paymentAmount = payment.amount;
+      user.paymentTransactionId = payment.transactionId;
+      await user.save();
+    }
+  }
+};
+
+const reconcilePendingPayments = async ({ limit = 50, userId = null } = {}) => {
+  const query = {
+    status: { $in: ["pending", "processing"] },
+  };
+
+  if (userId) {
+    query.userId = userId;
+  }
+
+  const pendingPayments = await Payment.find(query)
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .select("transactionId");
+
+  for (const pendingPayment of pendingPayments) {
+    try {
+      const result = await checkPaymentStatus(pendingPayment.transactionId);
+      const refreshedPayment = await Payment.findByTransactionId(
+        pendingPayment.transactionId,
+      );
+
+      if (refreshedPayment) {
+        await syncPaymentEntitlements(refreshedPayment, result.status);
+      }
+    } catch (error) {
+      logger.warn(
+        `[PaymentController] Reconciliation failed for ${pendingPayment.transactionId}: ${error.message}`,
+      );
+    }
+  }
+};
+
 // Initiate payment
 exports.initiatePayment = async (req, res) => {
   try {
@@ -95,6 +186,11 @@ exports.checkStatus = async (req, res) => {
 
     const result = await checkPaymentStatus(transactionId);
 
+    const refreshedPayment = await Payment.findOne({ transactionId, userId });
+    if (refreshedPayment) {
+      await syncPaymentEntitlements(refreshedPayment, result.status);
+    }
+
     res.json({
       success: true,
       data: result,
@@ -128,51 +224,9 @@ exports.handleWebhook = async (req, res) => {
     const result = await processWebhook(payload, signature);
 
     if (result.success) {
-      // If payment was successful, update user's payment status
-      if (result.status === "success") {
-        const payment = await Payment.findByTransactionId(result.transactionId);
-        if (payment && payment.userId) {
-          // Check if this is a subscription payment
-          if (
-            payment.metadata &&
-            payment.metadata.isSubscriptionPayment &&
-            payment.metadata.subscriptionId
-          ) {
-            console.log(
-              `[PaymentController] Processing subscription webhook: ${payment.metadata.subscriptionId}`,
-            );
-
-            // Process subscription payment
-            const subscriptionResult = await processSubscriptionWebhook(
-              payment.metadata.subscriptionId,
-              result.status === "success" ? "completed" : "failed",
-              {
-                paymentId: payment._id,
-                transactionId: result.transactionId,
-                amount: payment.amount,
-              },
-            );
-
-            if (subscriptionResult.success) {
-              console.log(
-                `[PaymentController] Subscription activated: ${payment.metadata.subscriptionId}`,
-              );
-            }
-          } else {
-            // Handle regular payment (legacy system)
-            const user = await User.findById(payment.userId);
-            if (user && user.paymentStatus !== "completed") {
-              user.paymentStatus = "completed";
-              user.paymentDate = new Date();
-              user.paymentAmount = payment.amount;
-              await user.save();
-
-              console.log(
-                `[PaymentController] Updated user payment status: ${user._id}`,
-              );
-            }
-          }
-        }
+      const payment = await Payment.findByTransactionId(result.transactionId);
+      if (payment) {
+        await syncPaymentEntitlements(payment, result.status);
       }
 
       res
@@ -271,6 +325,9 @@ exports.getAllPayments = async (req, res) => {
     if (phoneNumber) filters.phoneNumber = phoneNumber;
     if (userId) filters.userId = userId;
 
+    // Keep admin dashboard accurate by reconciling pending/processing payments first
+    await reconcilePendingPayments({ limit: Math.max(limit, 20) });
+
     const result = await getAllPayments(page, limit, filters);
 
     res.json({
@@ -293,6 +350,9 @@ exports.getAllPayments = async (req, res) => {
 // Admin: Get payment statistics
 exports.getStats = async (req, res) => {
   try {
+    // Refresh a batch of pending records so stats don't remain stale
+    await reconcilePendingPayments({ limit: 100 });
+
     const stats = await Payment.aggregate([
       {
         $group: {
@@ -373,9 +433,26 @@ exports.getStats = async (req, res) => {
 // Admin: Retry failed payment webhook
 exports.retryWebhook = async (req, res) => {
   try {
-    const { transactionId } = req.params;
+    const { transactionId, paymentId } = req.params;
 
-    const payment = await Payment.findByTransactionId(transactionId);
+    let resolvedTransactionId = transactionId;
+
+    if (!resolvedTransactionId && paymentId) {
+      const paymentById =
+        await Payment.findById(paymentId).select("transactionId");
+      if (paymentById) {
+        resolvedTransactionId = paymentById.transactionId;
+      }
+    }
+
+    if (!resolvedTransactionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Transaction ID or valid payment ID is required",
+      });
+    }
+
+    const payment = await Payment.findByTransactionId(resolvedTransactionId);
     if (!payment) {
       return res.status(404).json({
         success: false,
@@ -384,7 +461,13 @@ exports.retryWebhook = async (req, res) => {
     }
 
     // Check payment status with Nkwa Pay
-    const result = await checkPaymentStatus(transactionId);
+    const result = await checkPaymentStatus(resolvedTransactionId);
+    const refreshedPayment = await Payment.findByTransactionId(
+      resolvedTransactionId,
+    );
+    if (refreshedPayment) {
+      await syncPaymentEntitlements(refreshedPayment, result.status);
+    }
 
     res.json({
       success: true,

@@ -4,12 +4,20 @@ const User = require("../models/User");
 exports.protect = async (req, res, next) => {
   let token;
 
-  // Get token from header
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
-    token = req.headers.authorization.split(" ")[1];
+  // Get token from headers (support common client formats)
+  if (req.headers.authorization) {
+    const authHeader = req.headers.authorization.trim();
+
+    if (authHeader.toLowerCase().startsWith("bearer ")) {
+      token = authHeader.split(" ")[1];
+    } else {
+      // Support raw token format: Authorization: <jwt>
+      token = authHeader;
+    }
+  } else if (req.headers["x-access-token"]) {
+    token = String(req.headers["x-access-token"]).trim();
+  } else if (req.headers["token"]) {
+    token = String(req.headers["token"]).trim();
   }
 
   if (!token) {
