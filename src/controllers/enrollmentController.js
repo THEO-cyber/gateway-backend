@@ -43,13 +43,27 @@ exports.getResultDetail = async (req, res) => {
     }
     // Build detailed results for each question
     const details = test.questions.map((question, index) => {
-      // Match user's answer by questionId (which contains the original question index)
-      let userAnswer = submission.answers.find(
-        (ans) =>
-          ans.questionId !== undefined && parseInt(ans.questionId) === index,
-      );
+      // Match user's answer by questionId (which can be MongoDB ObjectId or numeric index)
+      let userAnswer = null;
 
-      // Fallback: try old format for backward compatibility
+      // Strategy 1: Match by MongoDB ObjectId if question has _id
+      if (question._id) {
+        userAnswer = submission.answers.find(
+          (ans) =>
+            ans.questionId &&
+            ans.questionId.toString() === question._id.toString(),
+        );
+      }
+
+      // Strategy 2: Match by numeric index
+      if (!userAnswer) {
+        userAnswer = submission.answers.find(
+          (ans) =>
+            ans.questionId !== undefined && parseInt(ans.questionId) === index,
+        );
+      }
+
+      // Strategy 3: Fallback to old format for backward compatibility
       if (!userAnswer) {
         const questionId = `q${index}`;
         userAnswer = submission.answers.find(
@@ -57,7 +71,7 @@ exports.getResultDetail = async (req, res) => {
         );
       }
 
-      // Final fallback: try by array index
+      // Strategy 4: Final fallback using array index
       if (!userAnswer && submission.answers[index]) {
         userAnswer = submission.answers[index];
       }
@@ -210,57 +224,130 @@ exports.submitTest = async (req, res) => {
       });
     }
 
-    // Get the user's question mapping for proper scoring
+    // Get the user's question mapping for proper scoring (optional for backward compatibility)
     const shuffleUtils = require("../utils/shuffleUtils");
-    const questionMap = await shuffleUtils.getQuestionMap(
-      req.user.id,
-      req.params.id,
-    );
+    let questionMap = null;
+    try {
+      questionMap = await shuffleUtils.getQuestionMap(
+        req.user.id,
+        req.params.id,
+      );
+    } catch (error) {
+      console.warn("[SubmitTest] Could not get question map:", error.message);
+    }
 
     // Store answers exactly as sent by frontend
     const answersToSave = Array.isArray(answers) ? answers : [];
 
-    // Validate answer format
-    for (const answer of answersToSave) {
-      if (
-        !answer ||
-        typeof answer.questionId === "undefined" ||
-        !answer.selectedAnswer
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid answer format. Each answer must have questionId and selectedAnswer.",
+    // More flexible validation - allow different answer formats
+    const validAnswers = [];
+    for (let i = 0; i < answersToSave.length; i++) {
+      const answer = answersToSave[i];
+      if (!answer) continue;
+
+      // Support multiple answer formats for backward compatibility
+      let questionId = null;
+      let selectedAnswer = null;
+      let questionIndex = null;
+
+      // Format 1: {questionId: MongoDB ObjectId string, selectedAnswer: string}
+      if (answer.questionId !== undefined && answer.selectedAnswer) {
+        // If questionId is a MongoDB ObjectId string, find matching question by _id
+        if (
+          typeof answer.questionId === "string" &&
+          answer.questionId.length === 24
+        ) {
+          questionIndex = test.questions.findIndex(
+            (q) => q._id && q._id.toString() === answer.questionId,
+          );
+          if (questionIndex >= 0) {
+            questionId = questionIndex; // Use found index
+            selectedAnswer = answer.selectedAnswer;
+          }
+        }
+        // If questionId is numeric (including 0), use directly
+        else if (
+          typeof answer.questionId === "number" ||
+          !isNaN(parseInt(answer.questionId))
+        ) {
+          questionId = parseInt(answer.questionId);
+          selectedAnswer = answer.selectedAnswer;
+        }
+      }
+      // Format 2: {question: number, answer: string} (old format)
+      else if (answer.question !== undefined && answer.answer) {
+        questionId = parseInt(answer.question);
+        selectedAnswer = answer.answer;
+      }
+      // Format 3: Direct array with index-based answers
+      else if (typeof answer === "string") {
+        questionId = i;
+        selectedAnswer = answer;
+      }
+
+      if (questionId !== null && selectedAnswer) {
+        validAnswers.push({
+          questionId: questionId,
+          selectedAnswer: selectedAnswer.trim(),
+          originalIndex: i,
+          originalQuestionObjectId: answer.questionId, // Keep original for debugging
         });
       }
     }
 
-    // Calculate score using question mapping for accurate scoring
+    console.log(
+      `[SubmitTest] Processing ${validAnswers.length} valid answers out of ${answersToSave.length} submitted`,
+    );
+
+    // Calculate score with multiple scoring strategies for accuracy
     let score = 0;
     const totalQuestions = test.questions.length;
 
-    for (const answer of answersToSave) {
-      // Use questionId (which is the original index) to get correct question
-      const originalQuestionIndex = parseInt(answer.questionId);
+    for (const answer of validAnswers) {
+      let questionIndex = answer.questionId;
 
-      if (
-        originalQuestionIndex >= 0 &&
-        originalQuestionIndex < test.questions.length
-      ) {
-        const question = test.questions[originalQuestionIndex];
-
+      // Validate question index is within bounds
+      if (questionIndex >= 0 && questionIndex < totalQuestions) {
+        const question = test.questions[questionIndex];
         if (question && question.correctAnswer === answer.selectedAnswer) {
           score++;
+          console.log(
+            `[SubmitTest] Correct answer for question ${questionIndex}: ${answer.selectedAnswer} (ObjectId: ${answer.originalQuestionObjectId})`,
+          );
+        } else if (question) {
+          console.log(
+            `[SubmitTest] Incorrect answer for question ${questionIndex}: ${answer.selectedAnswer} (correct: ${question.correctAnswer}) (ObjectId: ${answer.originalQuestionObjectId})`,
+          );
         }
+      } else {
+        console.warn(
+          `[SubmitTest] Invalid question index: ${questionIndex} for ObjectId: ${answer.originalQuestionObjectId}`,
+        );
       }
     }
 
+    console.log(`[SubmitTest] Final score: ${score}/${totalQuestions}`);
+
     // Clean up question mapping after submission
-    await shuffleUtils.cleanupQuestionMap(req.user.id, req.params.id);
+    if (questionMap) {
+      try {
+        await shuffleUtils.cleanupQuestionMap(req.user.id, req.params.id);
+      } catch (error) {
+        console.warn(
+          "[SubmitTest] Could not cleanup question map:",
+          error.message,
+        );
+      }
+    }
 
-    const percentage = (score / totalQuestions) * 100;
+    const percentage =
+      totalQuestions > 0
+        ? Math.round((score / totalQuestions) * 100 * 100) / 100
+        : 0;
 
-    // Calculate grade
+    console.log(`[SubmitTest] Calculated percentage: ${percentage}%`);
+
+    // Calculate grade based on percentage
     let grade = "F";
     if (percentage >= 90) grade = "A";
     else if (percentage >= 80) grade = "B";
@@ -268,17 +355,21 @@ exports.submitTest = async (req, res) => {
     else if (percentage >= 60) grade = "D";
     else if (percentage >= 50) grade = "E";
 
-    // Create submission
+    console.log(`[SubmitTest] Assigned grade: ${grade}`);
+
+    // Create submission with original answers format for compatibility
     const submission = await Submission.create({
       testId: req.params.id,
       studentEmail,
       studentName,
-      answers: answersToSave,
+      answers: answersToSave, // Store original format for detailed results
       score,
       totalQuestions,
       percentage,
       grade,
     });
+
+    console.log(`[SubmitTest] Submission created with ID: ${submission._id}`);
 
     // Update enrollment status
     await Enrollment.findOneAndUpdate(
@@ -292,8 +383,11 @@ exports.submitTest = async (req, res) => {
       totalQuestions,
       percentage,
       grade,
+      submissionId: submission._id,
+      message: `Test submitted successfully. Score: ${score}/${totalQuestions} (${percentage}%)`,
     });
   } catch (error) {
+    console.error("[SubmitTest] Error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to submit test",

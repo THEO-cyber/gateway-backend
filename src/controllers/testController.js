@@ -237,33 +237,61 @@ exports.getTestQuestions = async (req, res) => {
     const userId = req.user.id;
     const testId = req.params.id;
 
-    // Create user-specific shuffle order using deterministic randomization
-    // This ensures same user gets same order but different users get different orders
-    const shuffleUtils = require("../utils/shuffleUtils");
-    const { shuffledQuestions, questionMap } = shuffleUtils.shuffleQuestions(
-      test.questions,
-      userId,
-      testId,
-    );
+    // Try to implement shuffling with fallback for compatibility
+    let questionsForStudent;
+    let isShuffled = false;
 
-    // Store the question mapping for this user-test combination
-    await shuffleUtils.storeQuestionMap(userId, testId, questionMap);
+    try {
+      // Create user-specific shuffle order using deterministic randomization
+      // This ensures same user gets same order but different users get different orders
+      const shuffleUtils = require("../utils/shuffleUtils");
+      const { shuffledQuestions, questionMap } = shuffleUtils.shuffleQuestions(
+        test.questions,
+        userId,
+        testId,
+      );
 
-    // Return shuffled questions without correct answers for students
-    const questionsForStudent = shuffledQuestions.map((q, displayIndex) => ({
-      questionId: q.originalIndex, // Use original index as questionId for mapping
-      displayIndex, // Position in shuffled array
-      question: q.question,
-      options: q.options,
-    }));
+      // Store the question mapping for this user-test combination
+      await shuffleUtils.storeQuestionMap(userId, testId, questionMap);
+
+      // Return shuffled questions without correct answers for students
+      questionsForStudent = shuffledQuestions.map((q, displayIndex) => ({
+        questionId: q.originalIndex, // Use original index as questionId for mapping
+        displayIndex, // Position in shuffled array
+        question: q.question,
+        options: q.options,
+      }));
+
+      isShuffled = true;
+      console.log(
+        `[GetQuestions] Served ${questionsForStudent.length} shuffled questions to user ${userId}`,
+      );
+    } catch (shuffleError) {
+      console.warn(
+        "[GetQuestions] Shuffling failed, using original order:",
+        shuffleError.message,
+      );
+
+      // Fallback to original format for backward compatibility
+      questionsForStudent = test.questions.map((q, index) => ({
+        questionId: index, // Use index as questionId for compatibility
+        index, // Keep old index field for backward compatibility
+        question: q.question,
+        options: q.options,
+      }));
+
+      isShuffled = false;
+    }
 
     res.json({
       success: true,
       testTitle: test.title,
       questions: questionsForStudent,
-      isShuffled: true,
+      isShuffled: isShuffled,
+      questionCount: questionsForStudent.length,
     });
   } catch (error) {
+    console.error("[GetQuestions] Error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch questions",
