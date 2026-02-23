@@ -121,37 +121,37 @@ subscriptionSchema.virtual("nextBillingInfo").get(function () {
     return {
       date: null,
       formatted: "Pending activation",
-      type: "pending"
+      type: "pending",
     };
   } else if (this.autoRenew && this.status === "active" && this.endDate) {
     return {
       date: this.endDate,
       formatted: new Date(this.endDate).toLocaleDateString(),
-      type: "renewal"
+      type: "renewal",
     };
   } else if (this.status === "active" && this.endDate) {
     return {
       date: this.endDate,
       formatted: `Expires ${new Date(this.endDate).toLocaleDateString()}`,
-      type: "expiry"
+      type: "expiry",
     };
   } else if (this.status === "expired") {
     return {
       date: null,
       formatted: "Expired",
-      type: "expired"
+      type: "expired",
     };
   } else if (this.status === "cancelled") {
     return {
       date: null,
       formatted: "Cancelled",
-      type: "cancelled"
+      type: "cancelled",
     };
   } else {
     return {
       date: null,
       formatted: "N/A",
-      type: "none"
+      type: "none",
     };
   }
 });
