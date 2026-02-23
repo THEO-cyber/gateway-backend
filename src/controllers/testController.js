@@ -90,7 +90,7 @@ exports.getTestById = async (req, res) => {
   try {
     const test = await Test.findById(req.params.id).populate(
       "createdBy",
-      "firstName lastName email"
+      "firstName lastName email",
     );
 
     if (!test) {
@@ -221,7 +221,7 @@ exports.addQuestions = async (req, res) => {
 };
 
 // @route   GET /api/tests/:id/questions
-// @desc    Get test questions (for students during test)
+// @desc    Get test questions (for students during test) - Server-side shuffled
 // @access  Private
 exports.getTestQuestions = async (req, res) => {
   try {
@@ -234,9 +234,25 @@ exports.getTestQuestions = async (req, res) => {
       });
     }
 
-    // Return questions without correct answers for students
-    const questionsForStudent = test.questions.map((q, index) => ({
-      index,
+    const userId = req.user.id;
+    const testId = req.params.id;
+
+    // Create user-specific shuffle order using deterministic randomization
+    // This ensures same user gets same order but different users get different orders
+    const shuffleUtils = require("../utils/shuffleUtils");
+    const { shuffledQuestions, questionMap } = shuffleUtils.shuffleQuestions(
+      test.questions,
+      userId,
+      testId,
+    );
+
+    // Store the question mapping for this user-test combination
+    await shuffleUtils.storeQuestionMap(userId, testId, questionMap);
+
+    // Return shuffled questions without correct answers for students
+    const questionsForStudent = shuffledQuestions.map((q, displayIndex) => ({
+      questionId: q.originalIndex, // Use original index as questionId for mapping
+      displayIndex, // Position in shuffled array
       question: q.question,
       options: q.options,
     }));
@@ -245,6 +261,7 @@ exports.getTestQuestions = async (req, res) => {
       success: true,
       testTitle: test.title,
       questions: questionsForStudent,
+      isShuffled: true,
     });
   } catch (error) {
     res.status(500).json({

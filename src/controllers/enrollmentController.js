@@ -43,14 +43,25 @@ exports.getResultDetail = async (req, res) => {
     }
     // Build detailed results for each question
     const details = test.questions.map((question, index) => {
-      const questionId = `q${index}`;
-      // Match user's answer by questionId, fallback to index
+      // Match user's answer by questionId (which contains the original question index)
       let userAnswer = submission.answers.find(
-        (ans) => ans.questionId && ans.questionId.trim() === questionId
+        (ans) =>
+          ans.questionId !== undefined && parseInt(ans.questionId) === index,
       );
+
+      // Fallback: try old format for backward compatibility
+      if (!userAnswer) {
+        const questionId = `q${index}`;
+        userAnswer = submission.answers.find(
+          (ans) => ans.questionId && ans.questionId.trim() === questionId,
+        );
+      }
+
+      // Final fallback: try by array index
       if (!userAnswer && submission.answers[index]) {
         userAnswer = submission.answers[index];
       }
+
       return {
         questionIndex: index,
         question: question.question,
@@ -199,32 +210,53 @@ exports.submitTest = async (req, res) => {
       });
     }
 
-    // Store answers exactly as sent by frontend, no remapping
+    // Get the user's question mapping for proper scoring
+    const shuffleUtils = require("../utils/shuffleUtils");
+    const questionMap = await shuffleUtils.getQuestionMap(
+      req.user.id,
+      req.params.id,
+    );
+
+    // Store answers exactly as sent by frontend
     const answersToSave = Array.isArray(answers) ? answers : [];
 
-    // Calculate score: match by questionId if present, else by index
-    let score = 0;
-    const totalQuestions = test.questions.length;
-    for (let i = 0; i < totalQuestions; i++) {
-      let answer = answersToSave[i];
-      let question = test.questions[i];
-      // If questionId is present, try to match
-      if (answer && answer.questionId) {
-        const idx = test.questions.findIndex(
-          (q, qIdx) => `q${qIdx}` === answer.questionId
-        );
-        if (idx !== -1) {
-          question = test.questions[idx];
-        }
-      }
+    // Validate answer format
+    for (const answer of answersToSave) {
       if (
-        answer &&
-        question &&
-        question.correctAnswer === answer.selectedAnswer
+        !answer ||
+        typeof answer.questionId === "undefined" ||
+        !answer.selectedAnswer
       ) {
-        score++;
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid answer format. Each answer must have questionId and selectedAnswer.",
+        });
       }
     }
+
+    // Calculate score using question mapping for accurate scoring
+    let score = 0;
+    const totalQuestions = test.questions.length;
+
+    for (const answer of answersToSave) {
+      // Use questionId (which is the original index) to get correct question
+      const originalQuestionIndex = parseInt(answer.questionId);
+
+      if (
+        originalQuestionIndex >= 0 &&
+        originalQuestionIndex < test.questions.length
+      ) {
+        const question = test.questions[originalQuestionIndex];
+
+        if (question && question.correctAnswer === answer.selectedAnswer) {
+          score++;
+        }
+      }
+    }
+
+    // Clean up question mapping after submission
+    await shuffleUtils.cleanupQuestionMap(req.user.id, req.params.id);
 
     const percentage = (score / totalQuestions) * 100;
 
@@ -251,7 +283,7 @@ exports.submitTest = async (req, res) => {
     // Update enrollment status
     await Enrollment.findOneAndUpdate(
       { testId: req.params.id, studentEmail },
-      { submitted: true }
+      { submitted: true },
     );
 
     res.status(201).json({
@@ -355,7 +387,7 @@ exports.releaseResults = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Results can only be released 15 minutes after test completion. ${Math.ceil(
-          15 - minutesSinceCompletion
+          15 - minutesSinceCompletion,
         )} minute(s) remaining.`,
       });
     }
@@ -370,7 +402,7 @@ exports.releaseResults = async (req, res) => {
       {
         resultsReleased: true,
         releasedAt: new Date(),
-      }
+      },
     );
 
     res.json({
@@ -455,7 +487,7 @@ exports.getStudentResults = async (req, res) => {
       .sort({ submittedAt: -1 });
 
     console.log(
-      `[getStudentResults] Found ${results.length} result(s) for email: ${email}`
+      `[getStudentResults] Found ${results.length} result(s) for email: ${email}`,
     );
 
     const formattedResults = results.map((r) => ({
