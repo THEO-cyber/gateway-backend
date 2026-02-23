@@ -42,19 +42,16 @@ app.use(
 );
 
 // Rate limiting middleware - will be setup after Redis connects
-let rateLimiterMiddleware = (req, res, next) => {
-  // Temporary rate limiter until Redis is ready
-  const tempLimiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-    max: parseInt(process.env.RATE_LIMIT_MAX) || 500,
-    message: "Too many requests from this IP, please try again later.",
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => req.path === "/health" || req.path === "/metrics",
-  });
+const tempLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX) || 500,
+  message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === "/health" || req.path === "/metrics",
+});
 
-  return tempLimiter(req, res, next);
-};
+let rateLimiterMiddleware = tempLimiter;
 
 // Function to setup Redis-based rate limiter
 const setupRateLimiter = () => {

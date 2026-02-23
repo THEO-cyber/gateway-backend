@@ -107,6 +107,55 @@ subscriptionSchema.virtual("isActive").get(function () {
   return this.status === "active" && this.endDate > new Date();
 });
 
+// Virtual for next billing date
+subscriptionSchema.virtual("nextBillingDate").get(function () {
+  if (this.autoRenew && this.status === "active" && this.endDate) {
+    return this.endDate;
+  }
+  return null;
+});
+
+// Virtual for formatted next billing info
+subscriptionSchema.virtual("nextBillingInfo").get(function () {
+  if (this.status === "pending") {
+    return {
+      date: null,
+      formatted: "Pending activation",
+      type: "pending"
+    };
+  } else if (this.autoRenew && this.status === "active" && this.endDate) {
+    return {
+      date: this.endDate,
+      formatted: new Date(this.endDate).toLocaleDateString(),
+      type: "renewal"
+    };
+  } else if (this.status === "active" && this.endDate) {
+    return {
+      date: this.endDate,
+      formatted: `Expires ${new Date(this.endDate).toLocaleDateString()}`,
+      type: "expiry"
+    };
+  } else if (this.status === "expired") {
+    return {
+      date: null,
+      formatted: "Expired",
+      type: "expired"
+    };
+  } else if (this.status === "cancelled") {
+    return {
+      date: null,
+      formatted: "Cancelled",
+      type: "cancelled"
+    };
+  } else {
+    return {
+      date: null,
+      formatted: "N/A",
+      type: "none"
+    };
+  }
+});
+
 // Static method to get user's active subscriptions
 subscriptionSchema.statics.getActiveSubscriptions = function (userId) {
   return this.find({

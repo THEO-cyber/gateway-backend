@@ -1,6 +1,7 @@
 const Subscription = require("../models/Subscription");
 const User = require("../models/User");
 const Course = require("../models/Course");
+const Payment = require("../models/Payment");
 const nkwaPayService = require("../services/nkwaPayService");
 
 // Subscription plans configuration
@@ -40,6 +41,93 @@ const SUBSCRIPTION_PLANS = {
     features: ["Unlimited AI Usage", "AI Study Assistant"],
     description: "Unlimited AI access for 1 month",
   },
+};
+
+const reconcilePendingSubscriptions = async (limit = 100) => {
+  const pendingSubscriptions = await Subscription.find({
+    $or: [
+      { status: "pending" },
+      { userId: null },
+      { userId: { $exists: false } },
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .select("_id userId transactionId");
+
+  for (const subscription of pendingSubscriptions) {
+    try {
+      const payment = await Payment.findOne({
+        $or: [
+          { transactionId: subscription.transactionId },
+          { "metadata.subscriptionId": subscription._id.toString() },
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .select("_id transactionId amount status userId");
+
+      if (!payment) {
+        continue;
+      }
+
+      // Heal missing subscription->user linkage using payment owner
+      let needsUserUpdate = false;
+      if (!subscription.userId && payment.userId) {
+        await Subscription.findByIdAndUpdate(subscription._id, {
+          userId: payment.userId,
+        });
+        needsUserUpdate = true;
+        console.log(
+          `[SubscriptionController] Fixed missing userId for subscription ${subscription._id}`,
+        );
+      }
+
+      // Force refresh pending/processing payments from Nkwa before deciding
+      if (["pending", "processing"].includes(payment.status)) {
+        try {
+          await nkwaPayService.checkPaymentStatus(payment.transactionId);
+        } catch (statusError) {
+          console.warn(
+            `[SubscriptionController] Payment status refresh failed for ${payment.transactionId}: ${statusError.message}`,
+          );
+        }
+      }
+
+      const refreshedPayment = await Payment.findOne({
+        transactionId: payment.transactionId,
+      })
+        .sort({ createdAt: -1 })
+        .select("_id transactionId amount status");
+
+      const effectivePayment = refreshedPayment || payment;
+
+      // Only process if subscription status is still pending
+      const currentSubscription = await Subscription.findById(subscription._id);
+      if (currentSubscription && currentSubscription.status === "pending") {
+        if (effectivePayment.status === "success") {
+          await exports.processSubscriptionWebhook(
+            subscription._id,
+            "completed",
+            {
+              paymentId: effectivePayment._id,
+              transactionId: effectivePayment.transactionId,
+              amount: effectivePayment.amount,
+            },
+          );
+        } else if (effectivePayment.status === "failed") {
+          await exports.processSubscriptionWebhook(subscription._id, "failed", {
+            paymentId: effectivePayment._id,
+            transactionId: effectivePayment.transactionId,
+            amount: effectivePayment.amount,
+          });
+        }
+      }
+    } catch (error) {
+      console.warn(
+        `[SubscriptionController] Failed to reconcile subscription ${subscription._id}: ${error.message}`,
+      );
+    }
+  }
 };
 
 // Get all subscription plans
@@ -359,6 +447,9 @@ exports.getAllSubscriptions = async (req, res) => {
   try {
     const { page = 1, limit = 20, status, planType } = req.query;
 
+    // Keep admin dashboard statuses accurate
+    await reconcilePendingSubscriptions(Math.max(parseInt(limit), 20));
+
     const filter = {};
     if (status) filter.status = status;
     if (planType) filter.planType = planType;
@@ -372,9 +463,73 @@ exports.getAllSubscriptions = async (req, res) => {
 
     const total = await Subscription.countDocuments(filter);
 
+    // Format subscriptions with proper user information
+    const formattedSubscriptions = subscriptions.map((subscription) => {
+      const sub = subscription.toObject({ virtuals: true });
+
+      // Ensure user information is properly formatted
+      if (sub.userId) {
+        sub.user = {
+          id: sub.userId._id || sub.userId,
+          email: sub.userId.email || "No email",
+          firstName: sub.userId.firstName || "",
+          lastName: sub.userId.lastName || "",
+          fullName:
+            `${sub.userId.firstName || ""} ${sub.userId.lastName || ""}`.trim() ||
+            "No name",
+        };
+      } else {
+        sub.user = {
+          id: null,
+          email: "No email provided",
+          firstName: "",
+          lastName: "",
+          fullName: "No name provided",
+        };
+      }
+
+      // Format course information
+      if (sub.courserId) {
+        sub.course = {
+          id: sub.courserId._id || sub.courserId,
+          name: sub.courserId.name || "Unknown course",
+        };
+      } else {
+        sub.course = null;
+      }
+
+      // Use virtual field for next billing information or calculate manually
+      if (subscription.nextBillingInfo) {
+        const billingInfo = subscription.nextBillingInfo;
+        sub.nextBilling = billingInfo.date;
+        sub.nextBillingFormatted = billingInfo.formatted;
+        sub.billingType = billingInfo.type;
+      } else {
+        // Manual calculation as fallback
+        if (sub.autoRenew && sub.status === "active" && sub.endDate) {
+          // For auto-renewing subscriptions, next billing is the end date
+          sub.nextBilling = sub.endDate;
+          sub.nextBillingFormatted = new Date(sub.endDate).toLocaleDateString();
+          sub.billingType = "renewal";
+        } else if (sub.status === "active" && sub.endDate) {
+          // For non-auto-renewing active subscriptions, show expiry date
+          sub.nextBilling = null;
+          sub.nextBillingFormatted = `Expires ${new Date(sub.endDate).toLocaleDateString()}`;
+          sub.billingType = "expiry";
+        } else {
+          // For cancelled, pending, or expired subscriptions
+          sub.nextBilling = null;
+          sub.nextBillingFormatted = "N/A";
+          sub.billingType = "none";
+        }
+      }
+
+      return sub;
+    });
+
     res.status(200).json({
       success: true,
-      subscriptions,
+      subscriptions: formattedSubscriptions,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / parseInt(limit)),
@@ -525,6 +680,9 @@ exports.updateSubscriptionStatus = async (req, res) => {
 exports.getSubscriptionStats = async (req, res) => {
   try {
     const { timeRange = "30d" } = req.query;
+
+    // Refresh pending subscriptions before computing stats
+    await reconcilePendingSubscriptions(100);
 
     // Calculate date range
     const now = new Date();
