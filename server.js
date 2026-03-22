@@ -16,7 +16,7 @@ const buildKeepAliveUrl = () => {
   }
 
   if (process.env.RENDER_EXTERNAL_URL) {
-    return `${process.env.RENDER_EXTERNAL_URL.replace(/\/$/, "")}/health`;
+    return `${process.env.RENDER_EXTERNAL_URL.replace(/\/$/, "")}/keepalive`;
   }
 
   return null;
@@ -133,6 +133,16 @@ const httpServer = app.listen(PORT, "0.0.0.0", () => {
     );
   }
 });
+
+// Increase connection timeouts for mobile/cellular reliability.
+// Node's default keepAliveTimeout (5s) is often too low and can cause
+// socket resets when clients attempt to reuse recently-idle connections.
+httpServer.keepAliveTimeout =
+  parseInt(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS, 10) || 65000;
+httpServer.headersTimeout =
+  parseInt(process.env.HTTP_HEADERS_TIMEOUT_MS, 10) || 66000;
+httpServer.requestTimeout =
+  parseInt(process.env.HTTP_REQUEST_TIMEOUT_MS, 10) || 120000;
 
 // Handle server errors
 httpServer.on("error", (error) => {
