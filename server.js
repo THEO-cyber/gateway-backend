@@ -6,8 +6,21 @@ const { scheduleRecurringJobs } = require("./src/services/queueService");
 const logger = require("./src/utils/logger");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 const PORT = process.env.PORT || 5000;
+
+const buildKeepAliveUrl = () => {
+  if (process.env.KEEP_ALIVE_URL) {
+    return process.env.KEEP_ALIVE_URL;
+  }
+
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return `${process.env.RENDER_EXTERNAL_URL.replace(/\/$/, "")}/health`;
+  }
+
+  return null;
+};
 
 // Create uploads directory
 const uploadPath = path.join(__dirname, "uploads", "papers");
@@ -79,6 +92,46 @@ const httpServer = app.listen(PORT, "0.0.0.0", () => {
   logger.info(`🔧 Performance monitoring enabled`);
   logger.info(`💚 Server is now ready to serve users!`);
   serverStartTime = new Date(); // Reset start time when server is actually ready
+
+  // Optional external keep-alive ping (useful when an external URL is available)
+  const keepAliveEnabled =
+    process.env.ENABLE_KEEP_ALIVE_PING === "true" ||
+    process.env.NODE_ENV === "production";
+  const keepAliveUrl = buildKeepAliveUrl();
+  const keepAliveIntervalMs =
+    parseInt(process.env.KEEP_ALIVE_INTERVAL_MS, 10) || 10 * 60 * 1000;
+
+  if (keepAliveEnabled && keepAliveUrl) {
+    const runKeepAlivePing = async () => {
+      try {
+        await axios.get(keepAliveUrl, {
+          timeout: 8000,
+          headers: {
+            "User-Agent": "hnd-backend-keepalive/1.0",
+          },
+        });
+
+        logger.info(`💓 Keep-alive ping success: ${keepAliveUrl}`);
+      } catch (error) {
+        logger.warn(
+          `⚠️ Keep-alive ping failed: ${error.message} (${keepAliveUrl})`,
+        );
+      }
+    };
+
+    // Run once shortly after startup, then every configured interval
+    setTimeout(runKeepAlivePing, 15000);
+    const keepAliveTimer = setInterval(runKeepAlivePing, keepAliveIntervalMs);
+    keepAliveTimer.unref();
+
+    logger.info(
+      `💓 Keep-alive enabled: pinging ${keepAliveUrl} every ${Math.round(keepAliveIntervalMs / 60000)} minutes`,
+    );
+  } else if (keepAliveEnabled && !keepAliveUrl) {
+    logger.warn(
+      "⚠️ Keep-alive enabled but no URL configured. Set KEEP_ALIVE_URL or RENDER_EXTERNAL_URL.",
+    );
+  }
 });
 
 // Handle server errors
