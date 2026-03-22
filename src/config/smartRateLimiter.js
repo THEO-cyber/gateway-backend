@@ -126,9 +126,11 @@ class SmartRateLimiter {
         return `${this.getRequestIdentifier(req)}:general`;
       },
       skip: (req) => {
-        // Skip rate limiting for health checks and static assets
+        // Skip rate limiting for health/preflight/static traffic
         return (
+          req.method === "OPTIONS" ||
           req.path === "/health" ||
+          req.path === "/keepalive" ||
           req.path === "/metrics" ||
           req.path.startsWith("/static/")
         );

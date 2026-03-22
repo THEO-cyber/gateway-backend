@@ -16,7 +16,8 @@ const {
 } = require("./middleware/security");
 
 const app = express();
-app.set("trust proxy", 1); // Fix for rate-limit warning
+// Trust upstream proxy chain (Render/edge proxy) so req.ip resolves to real client IP.
+app.set("trust proxy", true);
 
 const buildRateLimitKey = (req) => {
   if (req.user && req.user.id) {
@@ -107,7 +108,11 @@ const tempLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: buildRateLimitKey,
-  skip: (req) => req.path === "/health" || req.path === "/metrics",
+  skip: (req) =>
+    req.method === "OPTIONS" ||
+    req.path === "/health" ||
+    req.path === "/keepalive" ||
+    req.path === "/metrics",
 });
 
 let rateLimiterMiddleware = tempLimiter;
@@ -124,7 +129,11 @@ const setupRateLimiter = () => {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: buildRateLimitKey,
-    skip: (req) => req.path === "/health" || req.path === "/metrics",
+    skip: (req) =>
+      req.method === "OPTIONS" ||
+      req.path === "/health" ||
+      req.path === "/keepalive" ||
+      req.path === "/metrics",
   };
 
   if (redisClient && redisClient.isConnected === true) {
