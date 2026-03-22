@@ -54,7 +54,8 @@ class SmartRateLimiter {
     }
 
     // Mobile clients can send a stable per-device header to avoid shared carrier NAT collisions
-    const deviceId = req.headers?.["x-device-id"] || req.headers?.["x-client-id"];
+    const deviceId =
+      req.headers?.["x-device-id"] || req.headers?.["x-client-id"];
     if (deviceId) {
       return `device:${this.hashValue(String(deviceId))}`;
     }
