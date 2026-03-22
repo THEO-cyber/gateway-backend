@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const crypto = require("crypto");
 const mongoSanitize = require("express-mongo-sanitize");
 const path = require("path");
 const redisClient = require("./config/redis");
@@ -17,6 +18,43 @@ const {
 const app = express();
 app.set("trust proxy", 1); // Fix for rate-limit warning
 
+const buildRateLimitKey = (req) => {
+  if (req.user && req.user.id) {
+    return `user:${req.user.id}`;
+  }
+
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex")
+        .slice(0, 16);
+      return `token:${tokenHash}`;
+    }
+  }
+
+  const deviceId = req.headers?.["x-device-id"] || req.headers?.["x-client-id"];
+  if (deviceId) {
+    const deviceHash = crypto
+      .createHash("sha256")
+      .update(String(deviceId))
+      .digest("hex")
+      .slice(0, 16);
+    return `device:${deviceHash}`;
+  }
+
+  const userAgent = req.get("User-Agent") || "unknown";
+  const ipUaHash = crypto
+    .createHash("sha256")
+    .update(`${req.ip}:${userAgent}`)
+    .digest("hex")
+    .slice(0, 16);
+  return `ipua:${ipUaHash}`;
+};
+
 // Test email route (Resend integration)
 app.use("/api/test-email", require("./routes/testEmail"));
 
@@ -25,16 +63,36 @@ app.use(helmet());
 app.use(compression());
 
 // CORS - Allow admin panel domain
+const defaultAllowedOrigins = [
+  "https://hndgatewayadminpanel.kesug.com",
+  "http://hndgatewayadminpanel.kesug.com",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5500",
+  "http://localhost:5500",
+];
+
+const envOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envOrigins])];
+
 app.use(
   cors({
-    origin: [
-      "https://hndgatewayadminpanel.kesug.com",
-      "http://hndgatewayadminpanel.kesug.com",
-      "http://localhost:3000",
-      "http://localhost:5173",
-      "http://127.0.0.1:5500",
-      "http://localhost:5500",
-    ],
+    origin: (origin, callback) => {
+      // Allow server-to-server and native mobile requests that have no Origin header
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -45,9 +103,10 @@ app.use(
 const tempLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_MAX) || 500,
-  message: "Too many requests from this IP, please try again later.",
+  message: "Too many requests from this client, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: buildRateLimitKey,
   skip: (req) => req.path === "/health" || req.path === "/metrics",
 });
 
@@ -61,9 +120,10 @@ const setupRateLimiter = () => {
   const config = {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
     max: parseInt(process.env.RATE_LIMIT_MAX) || 500,
-    message: "Too many requests from this IP, please try again later.",
+    message: "Too many requests from this client, please try again later.",
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: buildRateLimitKey,
     skip: (req) => req.path === "/health" || req.path === "/metrics",
   };
 

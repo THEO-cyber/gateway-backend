@@ -1,5 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const NodeCache = require("node-cache");
+const crypto = require("crypto");
 const logger = require("../utils/logger");
 
 /**
@@ -26,6 +27,41 @@ class SmartRateLimiter {
     logger.info(
       "🛡️ Smart rate limiter initialized - Memory-based protection active",
     );
+  }
+
+  /**
+   * Create a short stable hash to avoid storing raw tokens in memory keys/logs
+   */
+  hashValue(value) {
+    return crypto.createHash("sha256").update(value).digest("hex").slice(0, 16);
+  }
+
+  /**
+   * Build a rate-limit identifier that works before auth middleware runs.
+   * Priority: authenticated user -> bearer token fingerprint -> IP.
+   */
+  getRequestIdentifier(req) {
+    if (req.user && req.user.id) {
+      return `user:${req.user.id}`;
+    }
+
+    const authHeader = req.headers?.authorization;
+    if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+      const token = authHeader.slice(7).trim();
+      if (token) {
+        return `token:${this.hashValue(token)}`;
+      }
+    }
+
+    // Mobile clients can send a stable per-device header to avoid shared carrier NAT collisions
+    const deviceId = req.headers?.["x-device-id"] || req.headers?.["x-client-id"];
+    if (deviceId) {
+      return `device:${this.hashValue(String(deviceId))}`;
+    }
+
+    // Last-resort fallback: combine IP + UA fingerprint to reduce collisions on shared mobile IPs
+    const userAgent = req.get("User-Agent") || "unknown";
+    return `ipua:${this.hashValue(`${req.ip}:${userAgent}`)}`;
   }
 
   /**
@@ -78,18 +114,15 @@ class SmartRateLimiter {
       max: options.max || 100,
       message: options.message || {
         success: false,
-        message: "Too many requests from this IP, please try again later.",
+        message: "Too many requests from this client, please try again later.",
         retryAfter: Math.ceil((options.windowMs || 900000) / 1000),
       },
       standardHeaders: true,
       legacyHeaders: false,
       store: this.createMemoryStore(),
       keyGenerator: (req) => {
-        // Smart key generation based on user or IP
-        if (req.user && req.user.id) {
-          return `user:${req.user.id}:general`;
-        }
-        return `ip:${req.ip}:general`;
+        // Avoid shared mobile carrier IP collisions by using token fingerprint when available
+        return `${this.getRequestIdentifier(req)}:general`;
       },
       skip: (req) => {
         // Skip rate limiting for health checks and static assets
@@ -135,11 +168,7 @@ class SmartRateLimiter {
       legacyHeaders: false,
       store: this.createMemoryStore(),
       keyGenerator: (req) => {
-        // Stricter key generation
-        if (req.user && req.user.id) {
-          return `user:${req.user.id}:strict:${req.route?.path || req.path}`;
-        }
-        return `ip:${req.ip}:strict:${req.route?.path || req.path}`;
+        return `${this.getRequestIdentifier(req)}:strict:${req.route?.path || req.path}`;
       },
       handler: (req, res) => {
         this.stats.blocked++;
