@@ -250,6 +250,15 @@ app.get("/health", async (req, res) => {
   }
 });
 
+// Lightweight keep-alive endpoint (no database checks, good for rate-limit testing)
+app.get("/keepalive", (req, res) => {
+  res.json({
+    status: "OK",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
 // Performance metrics endpoint
 app.get("/metrics", async (req, res) => {
   try {
