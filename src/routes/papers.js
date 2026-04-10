@@ -17,7 +17,10 @@ const {
 } = require("../controllers/paperController");
 const { protect } = require("../middleware/auth");
 const { isActiveUser, isAdmin } = require("../middleware/adminAuth");
-const { requirePaperDownloadPayment, allowViewOnlyWithoutPayment } = require("../middleware/paperPaymentAuth");
+const {
+  requirePaperDownloadPayment,
+  allowViewOnlyWithoutPayment,
+} = require("../middleware/paperPaymentAuth");
 const upload = require("../middleware/upload");
 
 // All routes require authentication

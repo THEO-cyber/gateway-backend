@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const {
+  getPaperDownloadFee,
   initiatePaperDownloadPayment,
   checkPaperDownloadPaymentStatus,
 } = require("../controllers/paymentController");
@@ -12,6 +13,7 @@ router.use(protect);
 router.use(isActiveUser);
 
 // Paper download subscription payment routes
+router.get("/fee", getPaperDownloadFee);
 router.post("/initiate", initiatePaperDownloadPayment);
 router.get("/status/:transactionId", checkPaperDownloadPaymentStatus);
 

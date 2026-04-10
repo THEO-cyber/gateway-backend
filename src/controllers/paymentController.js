@@ -617,6 +617,48 @@ exports.refundPayment = async (req, res) => {
   }
 };
 
+exports.getPaperDownloadFee = async (req, res) => {
+  try {
+    const fee = parseInt(process.env.PAPER_DOWNLOAD_FEE) || 1000;
+    const subscriptionMonths =
+      parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
+
+    // Check if user has active subscription
+    const userId = req.user.userId;
+    const user = await User.findById(userId).select(
+      "paperDownloadSubscriptionExpiryDate",
+    );
+
+    const hasActiveSubscription =
+      user?.paperDownloadSubscriptionExpiryDate &&
+      user.paperDownloadSubscriptionExpiryDate > new Date();
+
+    res.json({
+      success: true,
+      data: {
+        fee,
+        currency: "XAF",
+        subscriptionMonths,
+        description: `Paper Download Subscription - ${subscriptionMonths} months unlimited access`,
+        hasActiveSubscription,
+        expiryDate: hasActiveSubscription
+          ? user.paperDownloadSubscriptionExpiryDate
+          : null,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "[PaymentController] Failed to get paper download fee:",
+      error.message,
+    );
+    res.status(500).json({
+      success: false,
+      message: "Failed to get fee information",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 // Paper Download Payment Functions
 exports.initiatePaperDownloadPayment = async (req, res) => {
   try {
@@ -631,8 +673,13 @@ exports.initiatePaperDownloadPayment = async (req, res) => {
     }
 
     // Check if user already has active subscription
-    const user = await User.findById(userId).select('paperDownloadSubscriptionExpiryDate');
-    if (user?.paperDownloadSubscriptionExpiryDate && user.paperDownloadSubscriptionExpiryDate > new Date()) {
+    const user = await User.findById(userId).select(
+      "paperDownloadSubscriptionExpiryDate",
+    );
+    if (
+      user?.paperDownloadSubscriptionExpiryDate &&
+      user.paperDownloadSubscriptionExpiryDate > new Date()
+    ) {
       return res.status(400).json({
         success: false,
         message: "You already have an active paper download subscription",
@@ -641,7 +688,8 @@ exports.initiatePaperDownloadPayment = async (req, res) => {
     }
 
     const amount = parseInt(process.env.PAPER_DOWNLOAD_FEE) || 1000;
-    const subscriptionMonths = parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
+    const subscriptionMonths =
+      parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
 
     // Initiate payment with paper download metadata
     const payment = await initiateNkwaPayment({
@@ -650,9 +698,9 @@ exports.initiatePaperDownloadPayment = async (req, res) => {
       amount,
       description: `Paper Download Subscription - ${subscriptionMonths} months unlimited access`,
       metadata: {
-        type: 'paper_download_subscription',
+        type: "paper_download_subscription",
         subscriptionMonths,
-      }
+      },
     });
 
     res.json({
@@ -661,11 +709,14 @@ exports.initiatePaperDownloadPayment = async (req, res) => {
       data: payment,
     });
   } catch (error) {
-    console.error("[PaymentController] Paper download payment failed:", error.message);
+    console.error(
+      "[PaymentController] Paper download payment failed:",
+      error.message,
+    );
     res.status(500).json({
       success: false,
       message: "Failed to initiate paper download payment",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -686,7 +737,7 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
     const payment = await Payment.findOne({
       transactionId,
       userId,
-      'metadata.type': 'paper_download_subscription'
+      "metadata.type": "paper_download_subscription",
     });
 
     if (!payment) {
@@ -697,9 +748,9 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
     }
 
     const result = await checkPaymentStatus(transactionId);
-    
+
     // If payment is successful, activate subscription
-    if (result.status === 'success' || result.status === 'completed') {
+    if (result.status === "success" || result.status === "completed") {
       const subscriptionMonths = payment.metadata?.subscriptionMonths || 9;
       const expiryDate = new Date();
       expiryDate.setMonth(expiryDate.getMonth() + subscriptionMonths);
@@ -711,10 +762,10 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
       // Update payment status
       await Payment.findOneAndUpdate(
         { transactionId },
-        { 
-          status: 'success',
+        {
+          status: "success",
           completedAt: new Date(),
-        }
+        },
       );
 
       return res.json({
@@ -733,11 +784,14 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error("[PaymentController] Paper download status check failed:", error.message);
+    console.error(
+      "[PaymentController] Paper download status check failed:",
+      error.message,
+    );
     res.status(500).json({
       success: false,
       message: "Failed to check paper download payment status",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -756,6 +810,7 @@ module.exports = {
   getPaymentDetails: exports.getPaymentDetails,
   refundPayment: exports.refundPayment,
   // Paper download functions
+  getPaperDownloadFee: exports.getPaperDownloadFee,
   initiatePaperDownloadPayment: exports.initiatePaperDownloadPayment,
   checkPaperDownloadPaymentStatus: exports.checkPaperDownloadPaymentStatus,
 };
