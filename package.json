@@ -11,7 +11,7 @@
     "test": "jest --watchAll",
     "install-deps": "npm install",
     "build": "echo 'No build step required'",
-    "postinstall": "node scripts/setup-indexes.js",
+    "vercel-build": "echo 'Vercel build complete'",
     "db:index": "node scripts/setup-indexes.js",
     "health": "node scripts/health-check.js"
   },

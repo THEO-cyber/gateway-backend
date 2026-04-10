@@ -22,10 +22,15 @@ const buildKeepAliveUrl = () => {
   return null;
 };
 
-// Create uploads directory
+// Create uploads directory (skip on Vercel serverless)
 const uploadPath = path.join(__dirname, "uploads", "papers");
-if (!fs.existsSync(uploadPath)) {
-  fs.mkdirSync(uploadPath, { recursive: true });
+if (!process.env.VERCEL && !fs.existsSync(uploadPath)) {
+  try {
+    fs.mkdirSync(uploadPath, { recursive: true });
+    logger.info("📁 Created uploads directory");
+  } catch (error) {
+    logger.warn("⚠️ Could not create uploads directory (possibly read-only filesystem)");
+  }
 }
 
 // Initialize services
@@ -318,3 +323,6 @@ if (process.env.NODE_ENV === "production") {
     }
   }, 30000);
 }
+
+// Export the app for Vercel serverless deployment
+module.exports = app;

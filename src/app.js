@@ -237,6 +237,30 @@ app.use("/api/paper-payment", require("./routes/paperPayment"));
 // Subscription routes
 app.use("/api/subscriptions", require("./routes/subscriptions"));
 
+// Simple test route for Vercel deployment
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "HND Gateway Backend API",
+    version: "2.0.0",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development"
+  });
+});
+
+app.get("/api", (req, res) => {
+  res.json({
+    success: true,
+    message: "HND Gateway API is running",
+    endpoints: {
+      auth: "/api/auth",
+      papers: "/api/papers", 
+      "paper-payment": "/api/paper-payment",
+      health: "/health"
+    }
+  });
+});
+
 // Health check with detailed system status
 app.get("/health", async (req, res) => {
   try {
