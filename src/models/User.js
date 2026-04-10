@@ -67,6 +67,11 @@ const userSchema = new mongoose.Schema({
     type: String,
   },
 
+  // Paper Download Subscription
+  paperDownloadSubscriptionExpiryDate: {
+    type: Date,
+  },
+
   // AI Token Management
   aiTokens: {
     used: {

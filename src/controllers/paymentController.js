@@ -617,6 +617,131 @@ exports.refundPayment = async (req, res) => {
   }
 };
 
+// Paper Download Payment Functions
+exports.initiatePaperDownloadPayment = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number is required",
+      });
+    }
+
+    // Check if user already has active subscription
+    const user = await User.findById(userId).select('paperDownloadSubscriptionExpiryDate');
+    if (user?.paperDownloadSubscriptionExpiryDate && user.paperDownloadSubscriptionExpiryDate > new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active paper download subscription",
+        expiryDate: user.paperDownloadSubscriptionExpiryDate,
+      });
+    }
+
+    const amount = parseInt(process.env.PAPER_DOWNLOAD_FEE) || 1000;
+    const subscriptionMonths = parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
+
+    // Initiate payment with paper download metadata
+    const payment = await initiateNkwaPayment({
+      userId,
+      phoneNumber,
+      amount,
+      description: `Paper Download Subscription - ${subscriptionMonths} months unlimited access`,
+      metadata: {
+        type: 'paper_download_subscription',
+        subscriptionMonths,
+      }
+    });
+
+    res.json({
+      success: true,
+      message: "Paper download subscription payment initiated",
+      data: payment,
+    });
+  } catch (error) {
+    console.error("[PaymentController] Paper download payment failed:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to initiate paper download payment",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+exports.checkPaperDownloadPaymentStatus = async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const userId = req.user.userId;
+
+    if (!transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Transaction ID is required",
+      });
+    }
+
+    // Verify the payment belongs to the user and is for paper download
+    const payment = await Payment.findOne({
+      transactionId,
+      userId,
+      'metadata.type': 'paper_download_subscription'
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Paper download payment not found",
+      });
+    }
+
+    const result = await checkPaymentStatus(transactionId);
+    
+    // If payment is successful, activate subscription
+    if (result.status === 'success' || result.status === 'completed') {
+      const subscriptionMonths = payment.metadata?.subscriptionMonths || 9;
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + subscriptionMonths);
+
+      await User.findByIdAndUpdate(userId, {
+        paperDownloadSubscriptionExpiryDate: expiryDate,
+      });
+
+      // Update payment status
+      await Payment.findOneAndUpdate(
+        { transactionId },
+        { 
+          status: 'success',
+          completedAt: new Date(),
+        }
+      );
+
+      return res.json({
+        success: true,
+        message: "Paper download subscription activated successfully",
+        data: {
+          ...result,
+          subscriptionActive: true,
+          expiryDate,
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("[PaymentController] Paper download status check failed:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check paper download payment status",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   initiatePayment: exports.initiatePayment,
   checkStatus: exports.checkStatus,
@@ -630,4 +755,7 @@ module.exports = {
   updatePaymentStatus: exports.updatePaymentStatus,
   getPaymentDetails: exports.getPaymentDetails,
   refundPayment: exports.refundPayment,
+  // Paper download functions
+  initiatePaperDownloadPayment: exports.initiatePaperDownloadPayment,
+  checkPaperDownloadPaymentStatus: exports.checkPaperDownloadPaymentStatus,
 };

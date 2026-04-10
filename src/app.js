@@ -231,6 +231,9 @@ app.use("/api/students", require("./routes/students")); // Student profiles
 // Payment route
 app.use("/api/payment", require("./routes/payment"));
 
+// Paper download payment routes
+app.use("/api/paper-payment", require("./routes/paperPayment"));
+
 // Subscription routes
 app.use("/api/subscriptions", require("./routes/subscriptions"));
 

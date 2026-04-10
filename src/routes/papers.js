@@ -17,20 +17,21 @@ const {
 } = require("../controllers/paperController");
 const { protect } = require("../middleware/auth");
 const { isActiveUser, isAdmin } = require("../middleware/adminAuth");
+const { requirePaperDownloadPayment, allowViewOnlyWithoutPayment } = require("../middleware/paperPaymentAuth");
 const upload = require("../middleware/upload");
 
 // All routes require authentication
 router.use(protect);
 router.use(isActiveUser);
 
-router.get("/", getPapers);
+router.get("/", allowViewOnlyWithoutPayment, getPapers);
 router.post("/upload", upload.single("file"), uploadPaper);
-router.get("/search", searchPapers);
+router.get("/search", allowViewOnlyWithoutPayment, searchPapers);
 router.get("/departments", getDepartments); // Get all departments
 router.get("/years/:department", getYearsByDepartment); // Get years by department
 router.get("/titles/:department/:year", getTitlesByDepartmentAndYear); // Get papers by dept & year
 router.get("/years/:course", getAvailableYears);
-router.get("/:id/download", downloadPaper);
+router.get("/:id/download", requirePaperDownloadPayment, downloadPaper);
 router.delete("/:id", deletePaper);
 
 // Admin only routes
