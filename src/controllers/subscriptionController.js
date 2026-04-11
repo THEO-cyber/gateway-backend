@@ -4,42 +4,15 @@ const Course = require("../models/Course");
 const Payment = require("../models/Payment");
 const nkwaPayService = require("../services/nkwaPayService");
 
-// Subscription plans configuration
+// Single Paper Download Subscription Plan (price from .env)
+const PAPER_DOWNLOAD_FEE = parseInt(process.env.PAPER_DOWNLOAD_FEE, 10) || 500;
 const SUBSCRIPTION_PLANS = {
-  daily: {
-    name: "Daily Access",
-    price: 100,
-    duration: "1 day",
-    features: ["All Courses", "All Tests", "Course Materials"],
-    description: "Full access to all courses for 1 day",
-  },
-  weekly: {
-    name: "Weekly Plan",
-    price: 500,
-    duration: "1 week",
-    features: ["All Courses", "All Tests", "Course Materials"],
-    description: "Full access to all courses for 1 week",
-  },
-  monthly: {
-    name: "Monthly Plan",
-    price: 1500,
-    duration: "1 month",
-    features: ["All Courses", "All Tests", "Course Materials"],
-    description: "Full access to all courses for 1 month",
-  },
-  four_month: {
-    name: "4-Month Plan",
-    price: 4000,
-    duration: "4 months",
-    features: ["All Courses", "All Tests", "Course Materials"],
-    description: "Full access to all courses for 4 months",
-  },
-  ai_monthly: {
-    name: "AI Monthly Plan",
-    price: 500,
-    duration: "1 month",
-    features: ["Unlimited AI Usage", "AI Study Assistant"],
-    description: "Unlimited AI access for 1 month",
+  paper_download: {
+    name: "Paper Download Subscription",
+    price: PAPER_DOWNLOAD_FEE,
+    duration: `${process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS || 9} months`,
+    features: ["Download all papers"],
+    description: `Download all papers for ${process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS || 9} months`,
   },
 };
 

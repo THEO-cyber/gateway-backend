@@ -6,7 +6,7 @@ exports.requirePaperDownloadPayment = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const user = await User.findById(userId).select(
-      "paperDownloadPaymentStatus paperDownloadSubscriptionExpiryDate role"
+      "paperDownloadPaymentStatus paperDownloadSubscriptionExpiryDate role",
     );
     if (!user) {
       return res.status(401).json({

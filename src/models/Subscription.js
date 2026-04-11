@@ -9,14 +9,7 @@ const subscriptionSchema = new mongoose.Schema(
     },
     planType: {
       type: String,
-      enum: [
-        "daily",
-        "weekly",
-        "monthly",
-        "four_month",
-        "ai_monthly",
-        "per_course",
-      ], // Added per_course for backward compatibility
+      enum: ["paper_download"],
       required: true,
     },
     courserId: {

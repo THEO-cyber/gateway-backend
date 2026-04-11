@@ -29,7 +29,9 @@ if (!process.env.VERCEL && !fs.existsSync(uploadPath)) {
     fs.mkdirSync(uploadPath, { recursive: true });
     logger.info("📁 Created uploads directory");
   } catch (error) {
-    logger.warn("⚠️ Could not create uploads directory (possibly read-only filesystem)");
+    logger.warn(
+      "⚠️ Could not create uploads directory (possibly read-only filesystem)",
+    );
   }
 }
 

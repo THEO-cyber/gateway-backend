@@ -244,7 +244,7 @@ app.get("/", (req, res) => {
     message: "HND Gateway Backend API",
     version: "2.0.0",
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development"
+    environment: process.env.NODE_ENV || "development",
   });
 });
 
@@ -254,10 +254,10 @@ app.get("/api", (req, res) => {
     message: "HND Gateway API is running",
     endpoints: {
       auth: "/api/auth",
-      papers: "/api/papers", 
+      papers: "/api/papers",
       "paper-payment": "/api/paper-payment",
-      health: "/health"
-    }
+      health: "/health",
+    },
   });
 });
 
