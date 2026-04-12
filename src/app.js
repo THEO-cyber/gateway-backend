@@ -1,3 +1,5 @@
+// JDoodle code execution route
+app.use("/api", require("./routes/codeExecution"));
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
