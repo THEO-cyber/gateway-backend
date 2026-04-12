@@ -66,30 +66,33 @@ exports.createStudyMaterial = async (req, res) => {
         });
       }
 
-      // Use Supabase if configured
-      if (isSupabaseConfigured()) {
-        try {
-          const fileBuffer = fsSync.readFileSync(req.file.path);
-          const { url, path: uploadPath } = await uploadToSupabase(
-            fileBuffer,
-            req.file.originalname,
-            process.env.SUPABASE_BUCKET,
-            "materials"
-          );
-          materialData.fileUrl = url;
-          materialData.storagePath = uploadPath;
+      // Only allow upload if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        return res.status(500).json({
+          success: false,
+          message: "Supabase is not configured. Cannot upload study material.",
+        });
+      }
+      try {
+        const fileBuffer = fsSync.readFileSync(req.file.path);
+        const { url, path: uploadPath } = await uploadToSupabase(
+          fileBuffer,
+          req.file.originalname,
+          process.env.SUPABASE_BUCKET,
+          "materials",
+        );
+        materialData.fileUrl = url;
+        materialData.storagePath = uploadPath;
 
-          // Delete temp file
-          fsSync.unlinkSync(req.file.path);
-        } catch (uploadError) {
-          console.error(
-            "Supabase upload failed, using local storage:",
-            uploadError
-          );
-          materialData.fileUrl = `/uploads/materials/${req.file.filename}`;
-        }
-      } else {
-        materialData.fileUrl = `/uploads/materials/${req.file.filename}`;
+        // Delete temp file
+        fsSync.unlinkSync(req.file.path);
+      } catch (uploadError) {
+        console.error("Supabase upload failed:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload study material to Supabase.",
+          error: uploadError.message,
+        });
       }
 
       materialData.fileName = req.file.originalname;
@@ -183,7 +186,7 @@ exports.deleteStudyMaterial = async (req, res) => {
           // Delete from Supabase (use correct bucket)
           await deleteFromSupabase(
             material.storagePath,
-            process.env.SUPABASE_BUCKET
+            process.env.SUPABASE_BUCKET,
           );
         } else {
           // Delete from local storage
