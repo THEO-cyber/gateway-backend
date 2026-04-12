@@ -15,32 +15,9 @@ const {
   detectAttackPatterns,
 } = require("./middleware/security");
 
-const app = express();
-// Trust upstream proxy chain (Render/edge proxy) so req.ip resolves to real client IP.
-app.set("trust proxy", true);
 
 // JDoodle code execution route
 app.use("/api", require("./routes/codeExecution"));
-const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
-const compression = require("compression");
-const rateLimit = require("express-rate-limit");
-const crypto = require("crypto");
-const mongoSanitize = require("express-mongo-sanitize");
-const path = require("path");
-const redisClient = require("./config/redis");
-const performanceMonitor = require("./utils/performanceMonitor");
-const logger = require("./utils/logger");
-const {
-  securityLogger,
-  detectAttackPatterns,
-} = require("./middleware/security");
-
-const app = express();
-// Trust upstream proxy chain (Render/edge proxy) so req.ip resolves to real client IP.
-app.set("trust proxy", true);
 
 const buildRateLimitKey = (req) => {
   if (req.user && req.user.id) {
