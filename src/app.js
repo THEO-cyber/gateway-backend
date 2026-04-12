@@ -15,6 +15,9 @@ const {
   detectAttackPatterns,
 } = require("./middleware/security");
 
+const app = express();
+// Trust upstream proxy chain (Render/edge proxy) so req.ip resolves to real client IP.
+app.set("trust proxy", true);
 
 // JDoodle code execution route
 app.use("/api", require("./routes/codeExecution"));
