@@ -74,18 +74,15 @@ exports.createStudyMaterial = async (req, res) => {
         });
       }
       try {
-        const fileBuffer = fsSync.readFileSync(req.file.path);
+        // Use buffer from memoryStorage
         const { url, path: uploadPath } = await uploadToSupabase(
-          fileBuffer,
+          req.file.buffer,
           req.file.originalname,
           process.env.SUPABASE_BUCKET,
           "materials",
         );
         materialData.fileUrl = url;
         materialData.storagePath = uploadPath;
-
-        // Delete temp file
-        fsSync.unlinkSync(req.file.path);
       } catch (uploadError) {
         console.error("Supabase upload failed:", uploadError);
         return res.status(500).json({
