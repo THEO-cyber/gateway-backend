@@ -45,23 +45,11 @@ router.post("/:id/questions", protect, isAdmin, addQuestions);
 router.get("/:id/questions", getTestQuestions);
 
 // Enrollment routes (require test access subscription)
-router.post(
-  "/:id/enroll",
-  protect,
-  updateSubscriptionStatus,
-  requireTestAccess,
-  enrollInTest,
-);
+router.post("/:id/enroll", protect, updateSubscriptionStatus, enrollInTest);
 router.get("/:id/enrollments", protect, isAdmin, getTestEnrollments);
 
 // Submission routes (require test access subscription)
-router.post(
-  "/:id/submit",
-  protect,
-  updateSubscriptionStatus,
-  requireTestAccess,
-  submitTest,
-);
+router.post("/:id/submit", protect, updateSubscriptionStatus, submitTest);
 router.get("/:id/submissions", protect, isAdmin, getTestSubmissions);
 router.get("/:id/submissions/:email", protect, isAdmin, getStudentSubmission);
 
