@@ -427,10 +427,7 @@ async function initiateSubscriptionPayment(
       data: response.data,
     };
   } catch (err) {
-    logger.error(
-      "[NkwaPayService] Error initiating subscription payment:",
-      err.message,
-    );
+    logger.error(`[NkwaPayService] Error initiating subscription payment: ${err.message}`);
 
     // Update payment record if it exists
     try {

@@ -259,14 +259,21 @@ exports.subscribe = async (req, res) => {
       });
     }
   } catch (error) {
-    // Log error securely
-    if (process.env.NODE_ENV === "development") {
-      logger.error("[SubscriptionController] Error subscribing:", error);
-    }
-    res.status(500).json({
+    logger.error("[SubscriptionController] Error subscribing:", error.message);
+
+    // Surface Nkwa Pay rejection messages directly to the client
+    const isPaymentProviderError =
+      error.message.includes("MTN collection is disabled") ||
+      error.message.includes("payment failed") ||
+      error.message.includes("payment provider") ||
+      error.message.includes("temporarily unavailable");
+
+    res.status(isPaymentProviderError ? 503 : 500).json({
       success: false,
-      message: "Failed to create subscription",
-      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
+      message: isPaymentProviderError
+        ? error.message
+        : "Failed to create subscription",
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
