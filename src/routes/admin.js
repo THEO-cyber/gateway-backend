@@ -68,6 +68,23 @@ router.get("/courses/stats", getCoursesStats);
 // Activity endpoint (limit 5 by default)
 router.get("/activity/recent", getRecentActivity);
 
+// Storage health check
+router.get("/storage/health", (req, res) => {
+  const { isSupabaseConfigured } = require("../services/supabaseStorage");
+  const configured = isSupabaseConfigured();
+  res.json({
+    success: true,
+    data: {
+      storage: configured ? "supabase" : "local",
+      healthy: true,
+      configured,
+      message: configured
+        ? "Supabase storage is configured and active"
+        : "Using local file storage (Supabase not configured)",
+    },
+  });
+});
+
 // User management
 router.get("/users", getAllUsers);
 router.get("/users/:id", getUserDetails);
@@ -82,6 +99,7 @@ router.delete("/answers/:questionId/:answerId", deleteAnyAnswer);
 // Reports
 router.get("/reports/popular-papers", getPopularPapers);
 router.get("/reports/active-users", getActiveUsers);
+router.get("/papers/popular", getPopularPapers); // Alias used by admin panel
 
 // Paper upload (multiple files)
 router.post("/papers/upload", upload.array("papers", 10), bulkUploadPapers);

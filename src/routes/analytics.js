@@ -33,6 +33,7 @@ router.post("/export/excel", exportExcel);
 
 // Aliases for admin panel compatibility
 router.get("/popular/courses", getTopPapers); // Same as top-papers
+router.get("/popular/papers", getTopPapers); // Alias used by admin panel
 router.get("/active/users", getTopUsers); // Same as top-users
 router.get("/qa/activity", getTrendingQuestions); // Same as trending-questions
 router.get("/downloads/stats", getEngagementMetrics); // Same as engagement
