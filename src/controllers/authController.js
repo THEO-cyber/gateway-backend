@@ -1,27 +1,53 @@
-﻿const logger = require("../utils/logger");
+const logger = require("../utils/logger");
 const User = require("../models/User");
 const PastPaper = require("../models/PastPaper");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 const sendEmail = require("../services/emailService");
+const {
+  buildOTPEmail,
+  buildVerificationEmail,
+  buildWelcomeEmail,
+  buildOTPLockoutEmail,
+} = require("../services/emailService");
 
-// Generate JWT Token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || "7d",
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const generateAccessToken = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || "1h",
   });
+
+const generateRefreshToken = async (userId) => {
+  const raw = crypto.randomBytes(40).toString("hex");
+  const hashed = crypto.createHash("sha256").update(raw).digest("hex");
+  await User.findByIdAndUpdate(userId, {
+    refreshToken: hashed,
+    refreshTokenExpire: Date.now() + 30 * 24 * 60 * 60 * 1000,
+  });
+  return raw;
 };
 
-// @route   POST /api/auth/register
-// @desc    Register new user
-// @access  Public
+const sanitizeUser = (user) => ({
+  id: user._id,
+  email: user.email,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  role: user.role,
+  department: user.department || null,
+  yearOfStudy: user.yearOfStudy || null,
+  emailVerified: user.emailVerified,
+  authProvider: user.authProvider,
+  needsProfileCompletion: !user.department,
+});
+
+// ── Register ──────────────────────────────────────────────────────────────────
 exports.register = async (req, res) => {
   try {
-    const { email, password, firstName, lastName, department, yearOfStudy } =
-      req.body;
+    const { email, password, firstName, lastName, department, yearOfStudy } = req.body;
 
-    // Validate required fields
     if (!email || !password || !firstName || !lastName) {
       return res.status(400).json({
         success: false,
@@ -29,37 +55,28 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Check if department is provided and has papers
     if (department) {
-      const departmentHasPapers = await PastPaper.findOne({
-        department,
-        status: "approved",
-      });
-
-      if (!departmentHasPapers) {
+      const hasPapers = await PastPaper.findOne({ department, status: "approved" });
+      if (!hasPapers) {
         return res.status(400).json({
           success: false,
-          message:
-            "No papers available for this department yet. Please contact admin or choose another department.",
+          message: "No papers available for this department yet. Please contact admin or choose another department.",
           code: "NO_PAPERS_FOR_DEPARTMENT",
         });
       }
     }
 
-    // Check if user exists
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({
-        success: false,
-        message: "User already exists with this email",
-      });
+      return res.status(400).json({ success: false, message: "User already exists with this email" });
     }
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user (defaults to student role)
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+
     const user = await User.create({
       email,
       password: hashedPassword,
@@ -67,558 +84,455 @@ exports.register = async (req, res) => {
       lastName,
       department: department || null,
       yearOfStudy: yearOfStudy || null,
+      authProvider: "local",
+      emailVerified: false,
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: Date.now() + 24 * 60 * 60 * 1000,
     });
 
-    // Generate token
-    const token = generateToken(user._id);
+    const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const verifyUrl = `${baseUrl}/api/auth/verify-email/${rawToken}`;
+    const emailContent = buildVerificationEmail(firstName, verifyUrl);
+    sendEmail({ to: email, ...emailContent }).catch((err) =>
+      logger.error("[Auth] Verification email failed:", err.message)
+    );
+
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id);
 
     res.status(201).json({
       success: true,
-      message: "Registration successful",
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          department: user.department,
-          yearOfStudy: user.yearOfStudy,
-        },
-        token,
-      },
+      message: "Registration successful. Please check your email to verify your account.",
+      data: { user: sanitizeUser(user), accessToken, refreshToken },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Registration failed",
-      error: error.message,
-    });
+    logger.error("[Auth] Register error:", error.message);
+    res.status(500).json({ success: false, message: "Registration failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   POST /api/auth/login
-// @desc    Login user
-// @access  Public
+// ── Verify Email ──────────────────────────────────────────────────────────────
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await User.findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: { $gt: Date.now() },
+    }).select("+emailVerificationToken +emailVerificationExpire");
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification link. Please request a new one.",
+      });
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save();
+
+    const welcome = buildWelcomeEmail(user.firstName);
+    sendEmail({ to: user.email, ...welcome }).catch(() => {});
+
+    res.json({ success: true, message: "Email verified successfully. You can now access all features." });
+  } catch (error) {
+    logger.error("[Auth] Email verification error:", error.message);
+    res.status(500).json({ success: false, message: "Email verification failed" });
+  }
+};
+
+// ── Resend Verification ───────────────────────────────────────────────────────
+exports.resendVerification = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("+emailVerificationToken +emailVerificationExpire");
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    if (user.emailVerified) {
+      return res.status(400).json({ success: false, message: "Email is already verified" });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+    await user.save();
+
+    const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const verifyUrl = `${baseUrl}/api/auth/verify-email/${rawToken}`;
+    const emailContent = buildVerificationEmail(user.firstName, verifyUrl);
+    await sendEmail({ to: user.email, ...emailContent });
+
+    res.json({ success: true, message: "Verification email sent. Please check your inbox." });
+  } catch (error) {
+    logger.error("[Auth] Resend verification error:", error.message);
+    res.status(500).json({ success: false, message: "Failed to send verification email" });
+  }
+};
+
+// ── Login ─────────────────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if user exists
     const user = await User.findOne({ email }).select("+password");
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+    if (!user) return res.status(401).json({ success: false, message: "Invalid email or password" });
+
+    if (user.authProvider === "google" && !user.password) {
+      return res.status(401).json({ success: false, message: "This account uses Google Sign-In. Please login with Google." });
     }
 
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
+    if (!isMatch) return res.status(401).json({ success: false, message: "Invalid email or password" });
 
-    // Check if user is banned or inactive
-    if (user.isBanned) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been banned. Please contact support.",
-      });
-    }
+    if (user.isBanned) return res.status(403).json({ success: false, message: "Your account has been banned. Please contact support." });
+    if (!user.isActive) return res.status(403).json({ success: false, message: "Your account has been deactivated. Please contact support." });
 
-    if (!user.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been deactivated. Please contact support.",
-      });
-    }
-
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.json({
-      success: true,
-      message: "Login successful",
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          department: user.department,
-          yearOfStudy: user.yearOfStudy,
-        },
-        token,
-      },
-    });
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id);
+    res.json({ success: true, message: "Login successful", data: { user: sanitizeUser(user), accessToken, refreshToken } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Login failed",
-      error: error.message,
-    });
+    logger.error("[Auth] Login error:", error.message);
+    res.status(500).json({ success: false, message: "Login failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   POST /api/auth/login/admin
-// @desc    Login for admin panel only
-// @access  Public
+// ── Admin Login ───────────────────────────────────────────────────────────────
 exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if user exists
     const user = await User.findOne({ email }).select("+password");
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
+    if (!user) return res.status(401).json({ success: false, message: "Invalid email or password" });
 
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
+    if (!isMatch) return res.status(401).json({ success: false, message: "Invalid email or password" });
 
-    // Check if user is admin
     if (user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Access denied. This login is for administrators only. Please use the student app.",
-      });
+      return res.status(403).json({ success: false, message: "Access denied. This login is for administrators only. Please use the student app." });
     }
 
-    // Check if user is banned or inactive
     if (user.isBanned || !user.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been suspended. Please contact support.",
-      });
+      return res.status(403).json({ success: false, message: "Your account has been suspended. Please contact support." });
     }
 
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.json({
-      success: true,
-      message: "Admin login successful",
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-        },
-        token,
-      },
-    });
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id);
+    res.json({ success: true, message: "Admin login successful", data: { user: sanitizeUser(user), accessToken, refreshToken } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Login failed",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Login failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   POST /api/auth/login/student
-// @desc    Login for student app only
-// @access  Public
+// ── Student Login ─────────────────────────────────────────────────────────────
 exports.loginStudent = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if user exists
     const user = await User.findOne({ email }).select("+password");
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+    if (!user) return res.status(401).json({ success: false, message: "Invalid email or password" });
+
+    if (user.authProvider === "google" && !user.password) {
+      return res.status(401).json({ success: false, message: "This account uses Google Sign-In. Please login with Google." });
     }
 
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
-    }
+    if (!isMatch) return res.status(401).json({ success: false, message: "Invalid email or password" });
 
-    // Check if user is student
     if (user.role === "admin") {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Access denied. Administrator accounts cannot use the student app. Please use the admin panel.",
-      });
+      return res.status(403).json({ success: false, message: "Administrator accounts cannot use the student app. Please use the admin panel." });
     }
 
-    // Check if user is banned or inactive
-    if (user.isBanned) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been banned. Please contact support.",
-      });
-    }
+    if (user.isBanned) return res.status(403).json({ success: false, message: "Your account has been banned." });
+    if (!user.isActive) return res.status(403).json({ success: false, message: "Your account has been deactivated." });
 
-    if (!user.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been deactivated. Please contact support.",
-      });
-    }
-
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.json({
-      success: true,
-      message: "Login successful",
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          department: user.department,
-          yearOfStudy: user.yearOfStudy,
-        },
-        token,
-      },
-    });
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id);
+    res.json({ success: true, message: "Login successful", data: { user: sanitizeUser(user), accessToken, refreshToken } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Login failed",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Login failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   POST /api/auth/forgot-password
-// @desc    Send password reset OTP
-// @access  Public
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+exports.googleAuth = async (req, res) => {
+  try {
+    const { idToken, credential } = req.body;
+    const token = idToken || credential;
+
+    if (!token) return res.status(400).json({ success: false, message: "Google ID token is required" });
+
+    if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === "your-google-client-id-here") {
+      return res.status(503).json({ success: false, message: "Google OAuth is not configured on this server. Please contact admin." });
+    }
+
+    let ticket;
+    try {
+      ticket = await googleClient.verifyIdToken({ idToken: token, audience: process.env.GOOGLE_CLIENT_ID });
+    } catch {
+      return res.status(401).json({ success: false, message: "Invalid or expired Google token" });
+    }
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, given_name: firstName, family_name: lastName, picture: avatar, email_verified } = payload;
+
+    if (!email) return res.status(400).json({ success: false, message: "Could not retrieve email from Google account" });
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.authProvider = "google";
+        if (!user.avatar && avatar) user.avatar = avatar;
+        if (!user.emailVerified && email_verified) user.emailVerified = true;
+        await user.save();
+      }
+
+      if (user.isBanned) return res.status(403).json({ success: false, message: "Your account has been banned." });
+      if (!user.isActive) return res.status(403).json({ success: false, message: "Your account has been deactivated." });
+
+      const accessToken = generateAccessToken(user._id);
+      const refreshToken = await generateRefreshToken(user._id);
+      return res.json({ success: true, message: "Login successful", isNewUser: false, data: { user: sanitizeUser(user), accessToken, refreshToken } });
+    }
+
+    user = await User.create({
+      email,
+      firstName: firstName || email.split("@")[0],
+      lastName: lastName || "",
+      googleId,
+      authProvider: "google",
+      avatar: avatar || "",
+      emailVerified: !!email_verified,
+      role: "student",
+    });
+
+    const welcome = buildWelcomeEmail(user.firstName);
+    sendEmail({ to: user.email, ...welcome }).catch(() => {});
+
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id);
+    res.status(201).json({ success: true, message: "Account created successfully via Google", isNewUser: true, data: { user: sanitizeUser(user), accessToken, refreshToken } });
+  } catch (error) {
+    logger.error("[Auth] Google auth error:", error.message);
+    res.status(500).json({ success: false, message: "Google authentication failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
+  }
+};
+
+// ── Forgot Password ───────────────────────────────────────────────────────────
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select(
+      "+resetPasswordOTP +resetPasswordExpire +resetPasswordAttempts +resetPasswordCooldown"
+    );
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "No user found with this email",
-      });
+      return res.json({ success: true, message: "If that email exists, an OTP has been sent." });
     }
 
-    // Check for cooldown
     if (user.resetPasswordCooldown && user.resetPasswordCooldown > Date.now()) {
-      const waitMins = Math.ceil(
-        (user.resetPasswordCooldown - Date.now()) / 60000,
-      );
-      return res.status(429).json({
-        success: false,
-        message: `Too many attempts. Please try again in ${waitMins} minute(s).`,
-      });
+      const waitMins = Math.ceil((user.resetPasswordCooldown - Date.now()) / 60000);
+      return res.status(429).json({ success: false, message: `Too many attempts. Please try again in ${waitMins} minute(s).` });
     }
 
-    // Reset attempts on new request
-    user.resetPasswordAttempts = 0;
+    if (user.resetPasswordOTP && user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
+      const secsLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 1000);
+      return res.status(429).json({ success: false, message: `An OTP was already sent. Please wait ${secsLeft} second(s) before requesting a new one.` });
+    }
 
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Hash OTP and save
-    user.resetPasswordOTP = crypto
-      .createHash("sha256")
-      .update(otp)
-      .digest("hex");
-    user.resetPasswordExpire = Date.now() + 1 * 60 * 1000; // 1 minute
-    await user.save();
-
-    // Send email
-    const message = `Your password reset OTP is: ${otp}\n\nThis OTP is valid for 1 minute.\n\nIf you didn't request this, please ignore this email.`;
-
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "Password Reset OTP - HND Gateway",
-        text: message,
-      });
-
-      res.json({
-        success: true,
-        message: "OTP sent to email",
-      });
-    } catch (error) {
-      user.resetPasswordOTP = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save();
-
-      // Log error securely without exposing details
-      if (process.env.NODE_ENV === "development") {
-        logger.error("Forgot password email error:", error);
-      }
-      res.status(500).json({
-        success: false,
-        message: "Email could not be sent",
-        error:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
-      });
-    }
-  } catch (error) {
-    // Log error securely without exposing details
-    if (process.env.NODE_ENV === "development") {
-      logger.error("Forgot password server error:", error);
-    }
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-};
-
-// @route   POST /api/auth/verify-otp
-// @desc    Verify OTP
-// @access  Public
-exports.verifyOTP = async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-
-    // Hash OTP
-    const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
-
-    const user = await User.findOne({ email });
-    if (!user || !user.resetPasswordOTP || !user.resetPasswordExpire) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired OTP",
-      });
-    }
-
-    // Check if OTP expired
-    if (user.resetPasswordExpire < Date.now()) {
-      return res.status(400).json({
-        success: false,
-        message: "OTP expired. Please request a new one.",
-      });
-    }
-
-    // Check attempts
-    if (user.resetPasswordAttempts >= 3) {
-      user.resetPasswordCooldown = Date.now() + 30 * 60 * 1000; // 30 min cooldown
-      await user.save();
-      // Send lockout email
-      try {
-        await sendEmail({
-          to: user.email,
-          subject: "Password Reset Locked - HND Gateway",
-          text: `You have entered an incorrect OTP 3 times. You can request another OTP after 30 minutes. If this wasn't you, please contact support.`,
-        });
-      } catch (e) {
-        // Log error securely without exposing details
-        if (process.env.NODE_ENV === "development") {
-          logger.error("Failed to send lockout email:", e);
-        }
-      }
-      return res.status(429).json({
-        success: false,
-        message: "Too many invalid attempts. Please try again in 30 minutes.",
-      });
-    }
-
-    // Check OTP
-    if (user.resetPasswordOTP !== hashedOTP) {
-      user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
-      await user.save();
-      return res.status(400).json({
-        success: false,
-        message: "Invalid OTP.",
-        attempts: user.resetPasswordAttempts,
-      });
-    }
-
-    // Success: reset attempts and cooldown
+    user.resetPasswordOTP = crypto.createHash("sha256").update(otp).digest("hex");
+    user.resetPasswordExpire = Date.now() + 60 * 1000;
     user.resetPasswordAttempts = 0;
     user.resetPasswordCooldown = undefined;
     await user.save();
 
-    res.json({
-      success: true,
-      message: "OTP verified successfully",
-    });
+    try {
+      const emailContent = buildOTPEmail(user.firstName, otp);
+      await sendEmail({ to: user.email, ...emailContent });
+      res.json({ success: true, message: "OTP sent to your email. It expires in 60 seconds." });
+    } catch (emailError) {
+      user.resetPasswordOTP = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      logger.error("[Auth] OTP email failed:", emailError.message);
+      res.status(500).json({ success: false, message: "Failed to send OTP email. Please try again." });
+    }
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    });
+    logger.error("[Auth] Forgot password error:", error.message);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// @route   POST /api/auth/reset-password
-// @desc    Reset password with OTP
-// @access  Public
+// ── Verify OTP ────────────────────────────────────────────────────────────────
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ success: false, message: "Email and OTP are required" });
+
+    const hashedOTP = crypto.createHash("sha256").update(String(otp)).digest("hex");
+
+    const user = await User.findOne({ email }).select(
+      "+resetPasswordOTP +resetPasswordExpire +resetPasswordAttempts +resetPasswordCooldown"
+    );
+
+    if (!user || !user.resetPasswordOTP) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    if (user.resetPasswordExpire < Date.now()) {
+      return res.status(400).json({ success: false, message: "OTP expired. Please request a new one." });
+    }
+
+    if (user.resetPasswordAttempts >= 3) {
+      user.resetPasswordCooldown = Date.now() + 30 * 60 * 1000;
+      await user.save();
+      const lockout = buildOTPLockoutEmail(user.firstName);
+      sendEmail({ to: user.email, ...lockout }).catch(() => {});
+      return res.status(429).json({ success: false, message: "Too many invalid attempts. Please try again in 30 minutes." });
+    }
+
+    if (user.resetPasswordOTP !== hashedOTP) {
+      user.resetPasswordAttempts = (user.resetPasswordAttempts || 0) + 1;
+      await user.save();
+      const remaining = 3 - user.resetPasswordAttempts;
+      return res.status(400).json({ success: false, message: `Invalid OTP. ${remaining} attempt(s) remaining.`, attempts: user.resetPasswordAttempts });
+    }
+
+    // Extend expiry to 10 minutes so user has time to enter new password
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordCooldown = undefined;
+    await user.save();
+
+    res.json({ success: true, message: "OTP verified successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
+  }
+};
+
+// ── Reset Password ────────────────────────────────────────────────────────────
 exports.resetPassword = async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
-    // Hash OTP
-    const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ success: false, message: "Email, OTP, and new password are required" });
+    }
+
+    const hashedOTP = crypto.createHash("sha256").update(String(otp)).digest("hex");
 
     const user = await User.findOne({
       email,
       resetPasswordOTP: hashedOTP,
       resetPasswordExpire: { $gt: Date.now() },
-    });
+    }).select("+resetPasswordOTP +resetPasswordExpire +resetPasswordAttempts");
 
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired OTP",
-      });
+      return res.status(400).json({ success: false, message: "Reset session expired. Please request a new OTP." });
     }
 
-    // Hash new password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
     user.resetPasswordOTP = undefined;
     user.resetPasswordExpire = undefined;
+    user.resetPasswordAttempts = 0;
     await user.save();
 
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.json({
-      success: true,
-      message: "Password reset successful",
-      data: {
-        user: {
-          id: user._id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-        },
-        token,
-      },
-    });
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = await generateRefreshToken(user._id);
+    res.json({ success: true, message: "Password reset successful", data: { user: sanitizeUser(user), accessToken, refreshToken } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Password reset failed",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Password reset failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   GET /api/auth/me
-// @desc    Get current user
-// @access  Private
+// ── Get Me ────────────────────────────────────────────────────────────────────
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).lean();
-
-    res.json({
-      success: true,
-      data: user,
-    });
+    res.json({ success: true, data: user });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Server error", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   POST /api/auth/verify
-// @desc    Verify token validity
-// @access  Private
+// ── Verify Token ──────────────────────────────────────────────────────────────
 exports.verifyToken = async (req, res) => {
   try {
-    // If protect middleware passed, token is valid
-    res.json({
-      success: true,
-      message: "Token is valid",
-      data: {
-        user: {
-          id: req.user._id,
-          email: req.user.email,
-          role: req.user.role,
-        },
-      },
-    });
+    res.json({ success: true, message: "Token is valid", data: { user: { id: req.user._id, email: req.user.email, role: req.user.role } } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Verification failed",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Verification failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
-// @route   POST /api/auth/logout
-// @desc    Logout user (client-side token removal)
-// @access  Private
+// ── Logout ────────────────────────────────────────────────────────────────────
 exports.logout = async (req, res) => {
   try {
-    // In JWT, logout is handled client-side by removing the token
-    // This endpoint exists for consistency and can be used for logging
-    res.json({
-      success: true,
-      message: "Logged out successfully",
-    });
+    await User.findByIdAndUpdate(req.user._id, { refreshToken: undefined, refreshTokenExpire: undefined });
+    res.json({ success: true, message: "Logged out successfully" });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Logout failed",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Logout failed" });
   }
 };
 
-// @route   POST /api/auth/refresh
-// @desc    Refresh JWT token
-// @access  Private
+// ── Refresh Token ─────────────────────────────────────────────────────────────
 exports.refreshToken = async (req, res) => {
   try {
-    // Generate new token
-    const token = generateToken(req.user._id);
+    const { refreshToken } = req.body;
 
-    res.json({
-      success: true,
-      message: "Token refreshed successfully",
-      data: {
-        token,
-        user: {
-          id: req.user._id,
-          email: req.user.email,
-          role: req.user.role,
-        },
-      },
-    });
+    if (!refreshToken) return res.status(401).json({ success: false, message: "Refresh token required" });
+
+    const hashed = crypto.createHash("sha256").update(refreshToken).digest("hex");
+
+    const user = await User.findOne({
+      refreshToken: hashed,
+      refreshTokenExpire: { $gt: Date.now() },
+    }).select("+refreshToken +refreshTokenExpire");
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid or expired refresh token. Please log in again.", code: "REFRESH_TOKEN_EXPIRED" });
+    }
+
+    if (user.isBanned || !user.isActive) {
+      return res.status(403).json({ success: false, message: "Account is inactive or banned." });
+    }
+
+    const newRefreshToken = await generateRefreshToken(user._id);
+    const accessToken = generateAccessToken(user._id);
+
+    res.json({ success: true, message: "Token refreshed successfully", data: { accessToken, refreshToken: newRefreshToken, user: { id: user._id, email: user.email, role: user.role } } });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Token refresh failed",
-      error: error.message,
-    });
+    res.status(500).json({ success: false, message: "Token refresh failed", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
+// ── Complete Profile ──────────────────────────────────────────────────────────
+exports.completeProfile = async (req, res) => {
+  try {
+    const { department, yearOfStudy } = req.body;
 
+    if (!department) {
+      return res.status(400).json({ success: false, message: "Department is required to complete your profile." });
+    }
+
+    const hasPapers = await PastPaper.findOne({ department, status: "approved" });
+    if (!hasPapers) {
+      return res.status(400).json({ success: false, message: "No papers available for this department yet. Please choose another department.", code: "NO_PAPERS_FOR_DEPARTMENT" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { department, yearOfStudy: yearOfStudy || null },
+      { new: true, runValidators: true }
+    );
+
+    res.json({ success: true, message: "Profile completed successfully.", data: { user: sanitizeUser(user) } });
+  } catch (error) {
+    logger.error("[Auth] Complete profile error:", error.message);
+    res.status(500).json({ success: false, message: "Failed to complete profile.", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
+  }
+};
