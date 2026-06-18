@@ -533,7 +533,7 @@ exports.getPaymentDetails = async (req, res) => {
     const { paymentId } = req.params;
 
     const payment = await Payment.findById(paymentId)
-      .populate("userId", "name email phone")
+      .populate("userId", "firstName lastName email")
       .populate("subscriptionId");
 
     if (!payment) {
