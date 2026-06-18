@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
@@ -63,9 +63,10 @@ router.get("/profile", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch profile",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
 
 module.exports = router;
+

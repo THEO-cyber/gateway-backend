@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const { createClient } = require("@supabase/supabase-js");
 
 // Initialize Supabase client
@@ -67,14 +68,14 @@ const deleteFile = async (
   bucket = process.env.SUPABASE_BUCKET || "hnd-gateway-pdf"
 ) => {
   if (!supabase) {
-    console.warn("Supabase is not configured. Skipping file deletion.");
+    logger.warn("Supabase is not configured. Skipping file deletion.");
     return false;
   }
 
   const { error } = await supabase.storage.from(bucket).remove([filePath]);
 
   if (error) {
-    console.error(`Failed to delete file from Supabase: ${error.message}`);
+    logger.error(`Failed to delete file from Supabase: ${error.message}`);
     return false;
   }
 
@@ -95,3 +96,4 @@ module.exports = {
   deleteFile,
   isSupabaseConfigured,
 };
+

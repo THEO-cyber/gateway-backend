@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const { chat, explain } = require("../controllers/aiController");
 const { protect } = require("../middleware/auth");
@@ -39,7 +39,7 @@ router.post("/chat", isActiveUser, requireAIAccess, async (req, res) => {
       res.status(500).json({
         success: false,
         message: "AI chat failed",
-        error: error.message,
+        ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
       });
     }
   }
@@ -70,7 +70,7 @@ router.post("/explain", isActiveUser, requireAIAccess, async (req, res) => {
       res.status(500).json({
         success: false,
         message: "AI explain failed",
-        error: error.message,
+        ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
       });
     }
   }
@@ -101,9 +101,10 @@ router.get("/history", protect, isActiveUser, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch chat history",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
 
 module.exports = router;
+

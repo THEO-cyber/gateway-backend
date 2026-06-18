@@ -43,6 +43,13 @@ exports.protect = async (req, res, next) => {
 
     next();
   } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: "Session expired. Please log in again.",
+        code: "TOKEN_EXPIRED",
+      });
+    }
     return res.status(401).json({
       success: false,
       message: "Not authorized, token failed",

@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 // @route   GET /api/tests/:id/result-detail
 // @desc    Get detailed question results for a test and user
 // @access  Public
@@ -172,7 +173,7 @@ exports.getTestEnrollments = async (req, res) => {
   try {
     const enrollments = await Enrollment.find({ testId: req.params.id }).sort({
       enrolledAt: -1,
-    });
+    }).lean();
 
     res.json({
       success: true,
@@ -233,7 +234,7 @@ exports.submitTest = async (req, res) => {
         req.params.id,
       );
     } catch (error) {
-      console.warn("[SubmitTest] Could not get question map:", error.message);
+      logger.warn("[SubmitTest] Could not get question map:", error.message);
     }
 
     // Store answers exactly as sent by frontend
@@ -295,7 +296,7 @@ exports.submitTest = async (req, res) => {
       }
     }
 
-    console.log(
+    logger.info(
       `[SubmitTest] Processing ${validAnswers.length} valid answers out of ${answersToSave.length} submitted`,
     );
 
@@ -311,29 +312,29 @@ exports.submitTest = async (req, res) => {
         const question = test.questions[questionIndex];
         if (question && question.correctAnswer === answer.selectedAnswer) {
           score++;
-          console.log(
+          logger.info(
             `[SubmitTest] Correct answer for question ${questionIndex}: ${answer.selectedAnswer} (ObjectId: ${answer.originalQuestionObjectId})`,
           );
         } else if (question) {
-          console.log(
+          logger.info(
             `[SubmitTest] Incorrect answer for question ${questionIndex}: ${answer.selectedAnswer} (correct: ${question.correctAnswer}) (ObjectId: ${answer.originalQuestionObjectId})`,
           );
         }
       } else {
-        console.warn(
+        logger.warn(
           `[SubmitTest] Invalid question index: ${questionIndex} for ObjectId: ${answer.originalQuestionObjectId}`,
         );
       }
     }
 
-    console.log(`[SubmitTest] Final score: ${score}/${totalQuestions}`);
+    logger.info(`[SubmitTest] Final score: ${score}/${totalQuestions}`);
 
     // Clean up question mapping after submission
     if (questionMap) {
       try {
         await shuffleUtils.cleanupQuestionMap(req.user.id, req.params.id);
       } catch (error) {
-        console.warn(
+        logger.warn(
           "[SubmitTest] Could not cleanup question map:",
           error.message,
         );
@@ -345,7 +346,7 @@ exports.submitTest = async (req, res) => {
         ? Math.round((score / totalQuestions) * 100 * 100) / 100
         : 0;
 
-    console.log(`[SubmitTest] Calculated percentage: ${percentage}%`);
+    logger.info(`[SubmitTest] Calculated percentage: ${percentage}%`);
 
     // Calculate grade based on percentage
     let grade = "F";
@@ -355,7 +356,7 @@ exports.submitTest = async (req, res) => {
     else if (percentage >= 60) grade = "D";
     else if (percentage >= 50) grade = "E";
 
-    console.log(`[SubmitTest] Assigned grade: ${grade}`);
+    logger.info(`[SubmitTest] Assigned grade: ${grade}`);
 
     // Create submission with original answers format for compatibility
     const submission = await Submission.create({
@@ -369,7 +370,7 @@ exports.submitTest = async (req, res) => {
       grade,
     });
 
-    console.log(`[SubmitTest] Submission created with ID: ${submission._id}`);
+    logger.info(`[SubmitTest] Submission created with ID: ${submission._id}`);
 
     // Update enrollment status
     await Enrollment.findOneAndUpdate(
@@ -387,7 +388,7 @@ exports.submitTest = async (req, res) => {
       message: `Test submitted successfully. Score: ${score}/${totalQuestions} (${percentage}%)`,
     });
   } catch (error) {
-    console.error("[SubmitTest] Error:", error);
+    logger.error("[SubmitTest] Error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to submit test",
@@ -403,7 +404,8 @@ exports.getTestSubmissions = async (req, res) => {
   try {
     const submissions = await Submission.find({ testId: req.params.id })
       .select("-answers") // Don't include answers in list view
-      .sort({ submittedAt: -1 });
+      .sort({ submittedAt: -1 })
+      .lean();
 
     res.json({
       success: true,
@@ -427,7 +429,7 @@ exports.getStudentSubmission = async (req, res) => {
     const submission = await Submission.findOne({
       testId: req.params.id,
       studentEmail: req.params.email,
-    });
+    }).lean();
 
     if (!submission) {
       return res.status(404).json({
@@ -529,7 +531,8 @@ exports.getEnrolledTests = async (req, res) => {
 
     const enrollments = await Enrollment.find({ studentEmail: email })
       .populate("testId")
-      .sort({ enrolledAt: -1 });
+      .sort({ enrolledAt: -1 })
+      .lean();
 
     const enrolledTests = enrollments.map((e) => ({
       _id: e.testId._id,
@@ -571,16 +574,17 @@ exports.getStudentResults = async (req, res) => {
     }
 
     // Debug logging
-    console.log("[getStudentResults] Query:", {
+    logger.info("[getStudentResults] Query:", {
       studentEmail: email,
     });
     const results = await Submission.find({
       studentEmail: email,
     })
       .populate("testId", "title department")
-      .sort({ submittedAt: -1 });
+      .sort({ submittedAt: -1 })
+      .lean();
 
-    console.log(
+    logger.info(
       `[getStudentResults] Found ${results.length} result(s) for email: ${email}`,
     );
 
@@ -613,3 +617,4 @@ exports.getStudentResults = async (req, res) => {
 };
 
 module.exports = exports;
+

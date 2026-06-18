@@ -67,6 +67,13 @@ const testSchema = new mongoose.Schema({
   completedAt: {
     type: Date,
   },
+
+  // Tracks which scheduled notifications have already fired
+  notificationsSent: {
+    published: { type: Boolean, default: false },
+    thirtyMinWarning: { type: Boolean, default: false },
+    testStarted: { type: Boolean, default: false },
+  },
 });
 
 testSchema.index({ department: 1, status: 1 });

@@ -5,3 +5,7 @@ uploads/
 .DS_Store
 dist/
 build/
+# Firebase service account keys (never commit these)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+serviceAccountKey.json

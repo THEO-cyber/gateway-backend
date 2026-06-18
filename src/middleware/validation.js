@@ -42,11 +42,22 @@ const validateEmail = () => {
 // Password validation
 const validatePassword = () => {
   return body("password")
-    .isLength({ min: 6 })
-    .withMessage("Password must be at least 6 characters long")
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .isLength({ min: 8 })
+    .withMessage("Password must be at least 8 characters long")
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/)
     .withMessage(
-      "Password must contain at least one lowercase letter, one uppercase letter, and one number",
+      "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one symbol (e.g. !@#$%)",
+    );
+};
+
+// Reusable password complexity check for any field name (e.g. newPassword)
+const validatePasswordField = (fieldName) => {
+  return body(fieldName)
+    .isLength({ min: 8 })
+    .withMessage("Password must be at least 8 characters long")
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/)
+    .withMessage(
+      "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one symbol (e.g. !@#$%)",
     );
 };
 
@@ -147,15 +158,8 @@ const validateSearchQuery = [
 // Subscription validation
 const validateSubscription = [
   body("planType")
-    .isIn([
-      "daily",
-      "weekly",
-      "monthly",
-      "four_month",
-      "ai_monthly",
-      "per_course",
-    ])
-    .withMessage("Invalid subscription plan type")
+    .isIn(["paper_download"])
+    .withMessage("Invalid subscription plan. Available plans: paper_download")
     .escape(),
   body("courseId")
     .optional()
@@ -225,6 +229,7 @@ module.exports = {
   validateObjectId,
   validateEmail,
   validatePassword,
+  validatePasswordField,
   validateUserRegistration,
   validateUserLogin,
   validateCourse,

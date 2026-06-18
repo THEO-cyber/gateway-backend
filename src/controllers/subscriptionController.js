@@ -1,8 +1,12 @@
+﻿const logger = require("../utils/logger");
 const Subscription = require("../models/Subscription");
 const User = require("../models/User");
 const Course = require("../models/Course");
 const Payment = require("../models/Payment");
 const nkwaPayService = require("../services/nkwaPayService");
+const { notifyUser, notifications } = require("../services/notificationService");
+const sendEmail = require("../services/emailService");
+const { buildPaymentSuccessEmail } = require("../services/emailService");
 
 // Single Paper Download Subscription Plan (price from .env)
 const PAPER_DOWNLOAD_FEE = parseInt(process.env.PAPER_DOWNLOAD_FEE, 10) || 500;
@@ -50,7 +54,7 @@ const reconcilePendingSubscriptions = async (limit = 100) => {
           userId: payment.userId,
         });
         needsUserUpdate = true;
-        console.log(
+        logger.info(
           `[SubscriptionController] Fixed missing userId for subscription ${subscription._id}`,
         );
       }
@@ -60,7 +64,7 @@ const reconcilePendingSubscriptions = async (limit = 100) => {
         try {
           await nkwaPayService.checkPaymentStatus(payment.transactionId);
         } catch (statusError) {
-          console.warn(
+          logger.warn(
             `[SubscriptionController] Payment status refresh failed for ${payment.transactionId}: ${statusError.message}`,
           );
         }
@@ -96,7 +100,7 @@ const reconcilePendingSubscriptions = async (limit = 100) => {
         }
       }
     } catch (error) {
-      console.warn(
+      logger.warn(
         `[SubscriptionController] Failed to reconcile subscription ${subscription._id}: ${error.message}`,
       );
     }
@@ -114,12 +118,12 @@ exports.getPlans = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("[SubscriptionController] Error getting plans:", error);
+      logger.error("[SubscriptionController] Error getting plans:", error);
     }
     res.status(500).json({
       success: false,
       message: "Failed to get subscription plans",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -138,12 +142,12 @@ exports.subscribe = async (req, res) => {
     // Backward compatibility: convert per_course to daily
     if (planType === "per_course") {
       planType = "daily";
-      console.log(
+      logger.info(
         "[SubscriptionController] Converting per_course to daily for backward compatibility",
       );
     }
 
-    console.log("[SubscriptionController] Subscribe request:", {
+    logger.info("[SubscriptionController] Subscribe request:", {
       planType,
       courseId,
       userId,
@@ -160,8 +164,8 @@ exports.subscribe = async (req, res) => {
 
     // Validate plan type
     if (!SUBSCRIPTION_PLANS[planType]) {
-      console.error("[SubscriptionController] Invalid plan type:", planType);
-      console.error(
+      logger.error("[SubscriptionController] Invalid plan type:", planType);
+      logger.error(
         "[SubscriptionController] Available plans:",
         Object.keys(SUBSCRIPTION_PLANS),
       );
@@ -193,7 +197,7 @@ exports.subscribe = async (req, res) => {
 
     // Validate amount matches plan price
     if (amount && amount !== plan.price) {
-      console.warn(
+      logger.warn(
         `[SubscriptionController] Amount mismatch: received ${amount}, expected ${plan.price} for ${planType}`,
       );
       return res.status(400).json({
@@ -257,12 +261,12 @@ exports.subscribe = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("[SubscriptionController] Error subscribing:", error);
+      logger.error("[SubscriptionController] Error subscribing:", error);
     }
     res.status(500).json({
       success: false,
       message: "Failed to create subscription",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -293,14 +297,14 @@ exports.getUserSubscriptions = async (req, res) => {
       message: "Subscriptions retrieved successfully",
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[SubscriptionController] Error getting subscriptions:",
       error,
     );
     res.status(500).json({
       success: false,
       message: "Failed to get subscriptions",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -355,12 +359,12 @@ exports.checkAccess = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("[SubscriptionController] Error checking access:", error);
+      logger.error("[SubscriptionController] Error checking access:", error);
     }
     res.status(500).json({
       success: false,
       message: "Failed to check access",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -403,14 +407,14 @@ exports.cancelSubscription = async (req, res) => {
       message: "Subscription cancelled successfully",
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[SubscriptionController] Error cancelling subscription:",
       error,
     );
     res.status(500).json({
       success: false,
       message: "Failed to cancel subscription",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -511,14 +515,14 @@ exports.getAllSubscriptions = async (req, res) => {
       message: "All subscriptions retrieved successfully",
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[SubscriptionController] Error getting all subscriptions:",
       error,
     );
     res.status(500).json({
       success: false,
       message: "Failed to get subscriptions",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -540,29 +544,36 @@ exports.processSubscriptionWebhook = async (
       subscription.paymentId = paymentData.paymentId;
       await subscription.save();
 
-      // Update user's subscription status
       const user = await User.findById(subscription.userId);
       await user.updateSubscriptionStatus();
 
-      console.log(
-        `[SubscriptionController] Subscription ${subscriptionId} activated successfully`,
-      );
+      // Paper download: also sync the dedicated expiry field on User
+      if (subscription.planType === "paper_download" && subscription.endDate) {
+        await User.findByIdAndUpdate(subscription.userId, {
+          paperDownloadSubscriptionExpiryDate: subscription.endDate,
+        });
+      }
+
+      // Push notification + email (non-blocking)
+      const plan = SUBSCRIPTION_PLANS[subscription.planType] || { name: subscription.planType };
+      notifyUser(subscription.userId, notifications.paymentSuccess(plan.name, subscription.endDate)).catch(() => {});
+      const emailContent = buildPaymentSuccessEmail(user.firstName, plan.name, subscription.endDate);
+      sendEmail({ to: user.email, ...emailContent }).catch(() => {});
+
+      logger.info(`[SubscriptionController] Subscription ${subscriptionId} activated successfully`);
     } else if (paymentStatus === "failed") {
       subscription.status = "cancelled";
       await subscription.save();
-
-      console.log(
-        `[SubscriptionController] Subscription ${subscriptionId} cancelled due to payment failure`,
-      );
+      logger.info(`[SubscriptionController] Subscription ${subscriptionId} cancelled due to payment failure`);
     }
 
     return { success: true, subscription };
   } catch (error) {
-    console.error(
+    logger.error(
       "[SubscriptionController] Error processing subscription webhook:",
       error,
     );
-    return { success: false, error: error.message };
+    return { success: false, ...(process.env.NODE_ENV !== "production" && { error: error.message }) };
   }
 };
 
@@ -589,7 +600,7 @@ exports.getSubscriptionDetails = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("Error fetching subscription details:", error);
+      logger.error("Error fetching subscription details:", error);
     }
     res.status(500).json({
       success: false,
@@ -604,6 +615,14 @@ exports.updateSubscriptionStatus = async (req, res) => {
   try {
     const { subscriptionId } = req.params;
     const { status, adminNote } = req.body;
+
+    const VALID_STATUSES = ["active", "expired", "cancelled", "pending"];
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}`,
+      });
+    }
 
     const subscription = await Subscription.findById(subscriptionId);
     if (!subscription) {
@@ -627,7 +646,7 @@ exports.updateSubscriptionStatus = async (req, res) => {
       await user.updateSubscriptionStatus();
     }
 
-    console.log(
+    logger.info(
       `Subscription ${subscriptionId} status updated from ${oldStatus} to ${status} by admin ${req.user.email}`,
     );
 
@@ -639,7 +658,7 @@ exports.updateSubscriptionStatus = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("Error updating subscription status:", error);
+      logger.error("Error updating subscription status:", error);
     }
     res.status(500).json({
       success: false,
@@ -734,7 +753,7 @@ exports.getSubscriptionStats = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("Error fetching subscription stats:", error);
+      logger.error("Error fetching subscription stats:", error);
     }
     res.status(500).json({
       success: false,
@@ -743,3 +762,5 @@ exports.getSubscriptionStats = async (req, res) => {
     });
   }
 };
+
+

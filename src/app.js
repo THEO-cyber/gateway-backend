@@ -17,7 +17,7 @@ const {
 
 const app = express();
 // Trust upstream proxy chain (Render/edge proxy) so req.ip resolves to real client IP.
-app.set("trust proxy", true);
+app.set("trust proxy", 1); // trust one upstream proxy (Render/nginx) — prevents X-Forwarded-For spoofing
 
 // JDoodle code execution route
 app.use("/api", require("./routes/codeExecution"));
@@ -66,19 +66,29 @@ app.use("/api/test-email", require("./routes/testEmail"));
 app.use(helmet());
 app.use(compression());
 
-// CORS - Allow admin panel domain
+// CORS - Allow admin panel, local dev, and local network for device testing
+const localIp = process.env.LOCAL_IP || "172.25.18.55";
 const defaultAllowedOrigins = [
   "https://hndgatewayadminpanel.kesug.com",
   "http://hndgatewayadminpanel.kesug.com",
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://localhost:8080",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
   "http://127.0.0.1:5500",
   "http://localhost:5500",
+  // Local network access for physical device testing
+  `http://${localIp}`,
+  `http://${localIp}:3000`,
+  `http://${localIp}:5173`,
+  `http://${localIp}:8080`,
+  `http://${localIp}:5500`,
 ];
 
 const envOrigins = (process.env.CORS_ORIGINS || "")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((o) => o.trim())
   .filter(Boolean);
 
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envOrigins])];
@@ -86,20 +96,22 @@ const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envOrigins])];
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow server-to-server and native mobile requests that have no Origin header
-      if (!origin) {
-        return callback(null, true);
-      }
+      // Allow requests with no Origin (native mobile apps, curl, Postman, server-to-server)
+      if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+
+      // Allow any origin on the local subnet in development (e.g. emulators, physical devices)
+      if (process.env.NODE_ENV !== "production") {
+        const localPatterns = [/^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/, /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/, new RegExp(`^http:\\/\\/${localIp.replace(/\./g, "\\.")}(:\\d+)?$`)];
+        if (localPatterns.some((p) => p.test(origin))) return callback(null, true);
       }
 
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Device-ID", "X-Client-ID"],
   }),
 );
 
@@ -210,6 +222,18 @@ if (process.env.NODE_ENV === "development") {
 // Static files - serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
+// DB health guard — return 503 instead of 500 when the database is down
+app.use("/api", (req, res, next) => {
+  const mongoose = require("mongoose");
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      message: "Service temporarily unavailable. Please try again shortly.",
+    });
+  }
+  next();
+});
+
 // API Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/dashboard", require("./routes/dashboard"));
@@ -230,6 +254,9 @@ app.use("/api/tests", require("./routes/tests")); // Tests & quizzes
 app.use("/api/study-materials", require("./routes/studyMaterials")); // Study materials
 app.use("/api/content/materials", require("./routes/studyMaterials")); // Admin panel alias
 app.use("/api/students", require("./routes/students")); // Student profiles
+
+// Push notifications
+app.use("/api/notifications", require("./routes/notifications"));
 
 // Payment route
 app.use("/api/payment", require("./routes/payment"));

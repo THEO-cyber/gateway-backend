@@ -1,10 +1,10 @@
-const {
-  initiateNkwaPayment,
+﻿const {
+  initiateSubscriptionPayment,
   checkPaymentStatus,
   processWebhook,
   getAllPayments,
-  // PAYMENT_FEE removed - using subscription plans
 } = require("../services/nkwaPayService");
+const Subscription = require("../models/Subscription");
 const Payment = require("../models/Payment");
 const User = require("../models/User");
 const logger = require("../utils/logger");
@@ -144,7 +144,7 @@ exports.initiatePayment = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Error in deprecated payment endpoint:",
       error.message,
     );
@@ -153,7 +153,7 @@ exports.initiatePayment = async (req, res) => {
       success: false,
       message:
         "Payment system has been migrated to subscriptions. Please use /api/subscriptions instead.",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -162,7 +162,7 @@ exports.initiatePayment = async (req, res) => {
 exports.checkStatus = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id;
 
     if (!transactionId) {
       return res.status(400).json({
@@ -198,7 +198,7 @@ exports.checkStatus = async (req, res) => {
   } catch (error) {
     // Log error securely
     if (process.env.NODE_ENV === "development") {
-      console.error("[PaymentController] Status check failed:", error.message);
+      logger.error("[PaymentController] Status check failed:", error.message);
     }
 
     res.status(500).json({
@@ -215,7 +215,7 @@ exports.handleWebhook = async (req, res) => {
       req.headers["x-signature"] || req.headers["x-nkwa-signature"];
     const payload = req.body;
 
-    console.log("[PaymentController] Webhook received:", {
+    logger.info("[PaymentController] Webhook received:", {
       signature: signature ? "present" : "missing",
       reference: payload.reference,
       status: payload.status,
@@ -236,7 +236,7 @@ exports.handleWebhook = async (req, res) => {
       res.status(400).json({ success: false, message: result.message });
     }
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Webhook processing failed:",
       error.message,
     );
@@ -249,10 +249,10 @@ exports.handleWebhook = async (req, res) => {
   }
 };
 
-// Get current fee (deprecated - redirects to subscription plans)
+// Get current fee (redirects to subscription plans)
 exports.getFee = (req, res) => {
   res.json({
-    success: false,
+    success: true,
     message: "Legacy payment fee has been replaced with subscription plans",
     redirectTo: "/api/subscriptions/plans",
     subscriptionPlans: {
@@ -288,7 +288,7 @@ exports.getFee = (req, res) => {
 // Get user payment history
 exports.getHistory = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
 
@@ -299,7 +299,7 @@ exports.getHistory = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Failed to fetch payment history:",
       error.message,
     );
@@ -335,7 +335,7 @@ exports.getAllPayments = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Admin: Failed to fetch payments:",
       error.message,
     );
@@ -418,7 +418,7 @@ exports.getStats = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Admin: Failed to fetch stats:",
       error.message,
     );
@@ -475,7 +475,7 @@ exports.retryWebhook = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Admin: Failed to retry webhook:",
       error.message,
     );
@@ -624,7 +624,7 @@ exports.getPaperDownloadFee = async (req, res) => {
       parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
 
     // Check if user has active subscription
-    const userId = req.user.userId;
+    const userId = req.user.id;
     const user = await User.findById(userId).select(
       "paperDownloadSubscriptionExpiryDate",
     );
@@ -647,7 +647,7 @@ exports.getPaperDownloadFee = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Failed to get paper download fee:",
       error.message,
     );
@@ -662,7 +662,7 @@ exports.getPaperDownloadFee = async (req, res) => {
 // Paper Download Payment Functions
 exports.initiatePaperDownloadPayment = async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     const { phoneNumber } = req.body;
 
     if (!phoneNumber) {
@@ -687,29 +687,37 @@ exports.initiatePaperDownloadPayment = async (req, res) => {
       });
     }
 
-    const amount = parseInt(process.env.PAPER_DOWNLOAD_FEE) || 1000;
-    const subscriptionMonths =
-      parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
+    const amount = parseInt(process.env.PAPER_DOWNLOAD_FEE) || 500;
+    const subscriptionMonths = parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS) || 9;
+    const transactionId = `PAPER_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`.toUpperCase();
 
-    // Initiate payment with paper download metadata
-    const payment = await initiateNkwaPayment({
+    // Create Subscription record so webhook can activate it properly
+    const subscription = await Subscription.create({
       userId,
+      planType: "paper_download",
+      amount,
+      transactionId,
+      status: "pending",
+      metadata: { planDetails: `Paper Download - ${subscriptionMonths} months` },
+    });
+
+    const payment = await initiateSubscriptionPayment(
+      userId,
+      req.user.email,
       phoneNumber,
       amount,
-      description: `Paper Download Subscription - ${subscriptionMonths} months unlimited access`,
-      metadata: {
-        type: "paper_download_subscription",
-        subscriptionMonths,
-      },
-    });
+      `Paper Download Subscription - ${subscriptionMonths} months unlimited access`,
+      transactionId,
+      subscription._id,
+    );
 
     res.json({
       success: true,
-      message: "Paper download subscription payment initiated",
-      data: payment,
+      message: "Paper download subscription payment initiated. Check your phone to confirm.",
+      data: { ...payment, subscriptionId: subscription._id },
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Paper download payment failed:",
       error.message,
     );
@@ -724,7 +732,7 @@ exports.initiatePaperDownloadPayment = async (req, res) => {
 exports.checkPaperDownloadPaymentStatus = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id;
 
     if (!transactionId) {
       return res.status(400).json({
@@ -737,7 +745,10 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
     const payment = await Payment.findOne({
       transactionId,
       userId,
-      "metadata.type": "paper_download_subscription",
+      $or: [
+        { "metadata.type": "paper_download_subscription" },
+        { "metadata.isSubscriptionPayment": true },
+      ],
     });
 
     if (!payment) {
@@ -749,33 +760,33 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
 
     const result = await checkPaymentStatus(transactionId);
 
-    // If payment is successful, activate subscription
+    // If payment is successful, activate subscription using the stored endDate
     if (result.status === "success" || result.status === "completed") {
-      const subscriptionMonths = payment.metadata?.subscriptionMonths || 9;
-      const expiryDate = new Date();
-      expiryDate.setMonth(expiryDate.getMonth() + subscriptionMonths);
+      const subscription = await Subscription.findOne({
+        $or: [
+          { transactionId },
+          { _id: payment.metadata?.subscriptionId },
+        ],
+      });
+      const expiryDate = subscription?.endDate || (() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() + (parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS, 10) || 9));
+        return d;
+      })();
 
       await User.findByIdAndUpdate(userId, {
         paperDownloadSubscriptionExpiryDate: expiryDate,
       });
 
-      // Update payment status
       await Payment.findOneAndUpdate(
         { transactionId },
-        {
-          status: "success",
-          completedAt: new Date(),
-        },
+        { status: "success", completedAt: new Date() },
       );
 
       return res.json({
         success: true,
         message: "Paper download subscription activated successfully",
-        data: {
-          ...result,
-          subscriptionActive: true,
-          expiryDate,
-        },
+        data: { ...result, subscriptionActive: true, expiryDate },
       });
     }
 
@@ -784,7 +795,7 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[PaymentController] Paper download status check failed:",
       error.message,
     );
@@ -796,21 +807,5 @@ exports.checkPaperDownloadPaymentStatus = async (req, res) => {
   }
 };
 
-module.exports = {
-  initiatePayment: exports.initiatePayment,
-  checkStatus: exports.checkStatus,
-  handleWebhook: exports.handleWebhook,
-  getFee: exports.getFee,
-  getHistory: exports.getHistory,
-  getAllPayments: exports.getAllPayments,
-  getStats: exports.getStats,
-  retryWebhook: exports.retryWebhook,
-  // Admin functions
-  updatePaymentStatus: exports.updatePaymentStatus,
-  getPaymentDetails: exports.getPaymentDetails,
-  refundPayment: exports.refundPayment,
-  // Paper download functions
-  getPaperDownloadFee: exports.getPaperDownloadFee,
-  initiatePaperDownloadPayment: exports.initiatePaperDownloadPayment,
-  checkPaperDownloadPaymentStatus: exports.checkPaperDownloadPaymentStatus,
-};
+// exports.* assignments above already attach to module.exports â€” no duplication needed
+

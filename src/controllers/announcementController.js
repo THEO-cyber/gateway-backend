@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const Announcement = require("../models/Announcement");
 
 // @route   GET /api/announcements
@@ -31,7 +32,8 @@ exports.getAllAnnouncements = async (req, res) => {
       .populate("createdBy", "email firstName lastName")
       .sort({ isPinned: -1, createdAt: -1 })
       .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .lean();
 
     const total = await Announcement.countDocuments(query);
 
@@ -132,7 +134,7 @@ exports.createAnnouncement = async (req, res) => {
       }
     } catch (e) {
       // Log but don't block response
-      console.error("WebSocket emit error:", e.message);
+      logger.error("WebSocket emit error:", e.message);
     }
 
     res.status(201).json({
@@ -141,7 +143,7 @@ exports.createAnnouncement = async (req, res) => {
       data: announcement,
     });
   } catch (error) {
-    console.error("Create announcement error:", error);
+    logger.error("Create announcement error:", error);
     res.status(500).json({
       success: false,
       error: "Failed to create announcement",
@@ -176,7 +178,7 @@ exports.updateAnnouncement = async (req, res) => {
       data: announcement,
     });
   } catch (error) {
-    console.error("Update announcement error:", error, {
+    logger.error("Update announcement error:", error, {
       params: req.params,
       body: req.body,
       headers: req.headers,
@@ -218,7 +220,7 @@ exports.deleteAnnouncement = async (req, res) => {
       message: "Announcement deleted successfully",
     });
   } catch (error) {
-    console.error("Delete announcement error:", error);
+    logger.error("Delete announcement error:", error);
     res.status(500).json({
       success: false,
       error: "Failed to delete announcement",
@@ -270,10 +272,9 @@ exports.toggleAnnouncementStatus = async (req, res) => {
 // @access  Private (Admin only)
 exports.getAnnouncementAnalytics = async (req, res) => {
   try {
-    const announcement = await Announcement.findById(req.params.id).populate(
-      "viewedBy",
-      "email firstName lastName role"
-    );
+    const announcement = await Announcement.findById(req.params.id)
+      .populate("viewedBy", "email firstName lastName role")
+      .lean();
 
     if (!announcement) {
       return res.status(404).json({
@@ -305,3 +306,4 @@ exports.getAnnouncementAnalytics = async (req, res) => {
 };
 
 module.exports = exports;
+

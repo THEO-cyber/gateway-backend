@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const Department = require("../models/Department");
 
@@ -56,9 +56,10 @@ router.get("/", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch departments",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
 
 module.exports = router;
+

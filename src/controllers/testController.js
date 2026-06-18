@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const Test = require("../models/Test");
 const Enrollment = require("../models/Enrollment");
 const Submission = require("../models/Submission");
@@ -263,11 +264,11 @@ exports.getTestQuestions = async (req, res) => {
       }));
 
       isShuffled = true;
-      console.log(
+      logger.info(
         `[GetQuestions] Served ${questionsForStudent.length} shuffled questions to user ${userId}`,
       );
     } catch (shuffleError) {
-      console.warn(
+      logger.warn(
         "[GetQuestions] Shuffling failed, using original order:",
         shuffleError.message,
       );
@@ -291,7 +292,7 @@ exports.getTestQuestions = async (req, res) => {
       questionCount: questionsForStudent.length,
     });
   } catch (error) {
-    console.error("[GetQuestions] Error:", error);
+    logger.error("[GetQuestions] Error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch questions",
@@ -301,3 +302,4 @@ exports.getTestQuestions = async (req, res) => {
 };
 
 module.exports = exports;
+

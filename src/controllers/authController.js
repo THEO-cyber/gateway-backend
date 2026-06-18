@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const User = require("../models/User");
 const PastPaper = require("../models/PastPaper");
 const jwt = require("jsonwebtoken");
@@ -370,7 +371,7 @@ exports.forgotPassword = async (req, res) => {
 
       // Log error securely without exposing details
       if (process.env.NODE_ENV === "development") {
-        console.error("Forgot password email error:", error);
+        logger.error("Forgot password email error:", error);
       }
       res.status(500).json({
         success: false,
@@ -382,7 +383,7 @@ exports.forgotPassword = async (req, res) => {
   } catch (error) {
     // Log error securely without exposing details
     if (process.env.NODE_ENV === "development") {
-      console.error("Forgot password server error:", error);
+      logger.error("Forgot password server error:", error);
     }
     res.status(500).json({
       success: false,
@@ -432,7 +433,7 @@ exports.verifyOTP = async (req, res) => {
       } catch (e) {
         // Log error securely without exposing details
         if (process.env.NODE_ENV === "development") {
-          console.error("Failed to send lockout email:", e);
+          logger.error("Failed to send lockout email:", e);
         }
       }
       return res.status(429).json({
@@ -530,7 +531,7 @@ exports.resetPassword = async (req, res) => {
 // @access  Private
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).lean();
 
     res.json({
       success: true,
@@ -619,3 +620,5 @@ exports.refreshToken = async (req, res) => {
     });
   }
 };
+
+

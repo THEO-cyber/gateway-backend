@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const PastPaper = require("../models/PastPaper");
 const path = require("path");
 const fs = require("fs");
@@ -23,7 +24,8 @@ exports.getPapers = async (req, res) => {
       .sort({ year: -1, createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
-      .populate("uploadedBy", "email");
+      .populate("uploadedBy", "email")
+      .lean();
 
     const total = await PastPaper.countDocuments(query);
 
@@ -41,13 +43,13 @@ exports.getPapers = async (req, res) => {
     });
   } catch (error) {
     // Detailed error logging
-    console.error("[getPapers] Error:", error);
+    logger.error("[getPapers] Error:", error);
     if (error && error.stack) {
-      console.error("[getPapers] Stack:", error.stack);
+      logger.error("[getPapers] Stack:", error.stack);
     }
-    console.error("[getPapers] Request query:", req.query);
+    logger.error("[getPapers] Request query:", req.query);
     if (req.user) {
-      console.error(
+      logger.error(
         "[getPapers] User:",
         req.user._id,
         req.user.email || req.user.username || ""
@@ -107,16 +109,16 @@ exports.uploadPaper = async (req, res) => {
         fs.unlinkSync(req.file.path);
       } catch (error) {
         // Fallback to local storage if Supabase fails
-        console.error(
+        logger.error(
           "[uploadPaper] Supabase upload failed, using local storage:",
           error
         );
         if (error && error.stack) {
-          console.error("[uploadPaper] Supabase error stack:", error.stack);
+          logger.error("[uploadPaper] Supabase error stack:", error.stack);
         }
-        console.error("[uploadPaper] Request body:", req.body);
+        logger.error("[uploadPaper] Request body:", req.body);
         if (req.file) {
-          console.error("[uploadPaper] File info:", {
+          logger.error("[uploadPaper] File info:", {
             originalname: req.file.originalname,
             filename: req.file.filename,
             size: req.file.size,
@@ -124,7 +126,7 @@ exports.uploadPaper = async (req, res) => {
           });
         }
         if (req.user) {
-          console.error(
+          logger.error(
             "[uploadPaper] User:",
             req.user._id,
             req.user.email || req.user.username || ""
@@ -165,7 +167,7 @@ exports.uploadPaper = async (req, res) => {
       try {
         fs.unlinkSync(req.file.path);
       } catch (cleanupErr) {
-        console.error("[uploadPaper] Error cleaning up file:", cleanupErr);
+        logger.error("[uploadPaper] Error cleaning up file:", cleanupErr);
       }
     }
     // Detailed error logging
@@ -184,13 +186,13 @@ exports.uploadPaper = async (req, res) => {
       });
       return;
     }
-    console.error("[uploadPaper] Error:", error);
+    logger.error("[uploadPaper] Error:", error);
     if (error && error.stack) {
-      console.error("[uploadPaper] Stack:", error.stack);
+      logger.error("[uploadPaper] Stack:", error.stack);
     }
-    console.error("[uploadPaper] Request body:", req.body);
+    logger.error("[uploadPaper] Request body:", req.body);
     if (req.file) {
-      console.error("[uploadPaper] File info:", {
+      logger.error("[uploadPaper] File info:", {
         originalname: req.file.originalname,
         filename: req.file.filename,
         size: req.file.size,
@@ -198,7 +200,7 @@ exports.uploadPaper = async (req, res) => {
       });
     }
     if (req.user) {
-      console.error(
+      logger.error(
         "[uploadPaper] User:",
         req.user._id,
         req.user.email || req.user.username || ""
@@ -310,16 +312,16 @@ exports.deletePaper = async (req, res) => {
         }
       }
     } catch (storageError) {
-      console.error(
+      logger.error(
         "[deletePaper] Error deleting file from storage:",
         storageError
       );
       if (storageError && storageError.stack) {
-        console.error("[deletePaper] Storage error stack:", storageError.stack);
+        logger.error("[deletePaper] Storage error stack:", storageError.stack);
       }
-      console.error("[deletePaper] Paper info:", paper);
+      logger.error("[deletePaper] Paper info:", paper);
       if (req.user) {
-        console.error(
+        logger.error(
           "[deletePaper] User:",
           req.user._id,
           req.user.email || req.user.username || ""
@@ -335,13 +337,13 @@ exports.deletePaper = async (req, res) => {
     });
   } catch (error) {
     // Detailed error logging
-    console.error("[deletePaper] Error:", error);
+    logger.error("[deletePaper] Error:", error);
     if (error && error.stack) {
-      console.error("[deletePaper] Stack:", error.stack);
+      logger.error("[deletePaper] Stack:", error.stack);
     }
-    console.error("[deletePaper] Request params:", req.params);
+    logger.error("[deletePaper] Request params:", req.params);
     if (req.user) {
-      console.error(
+      logger.error(
         "[deletePaper] User:",
         req.user._id,
         req.user.email || req.user.username || ""
@@ -377,7 +379,8 @@ exports.searchPapers = async (req, res) => {
       ],
     })
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .lean();
 
     res.json({
       success: true,
@@ -524,7 +527,7 @@ exports.bulkUploadPapers = async (req, res) => {
         try {
           fs.unlinkSync(file.path);
         } catch (cleanupErr) {
-          console.error(
+          logger.error(
             "[bulkUploadPapers] Error cleaning up file:",
             cleanupErr
           );
@@ -562,24 +565,24 @@ exports.bulkUploadPapers = async (req, res) => {
             fs.unlinkSync(file.path);
           } catch (uploadError) {
             // Fallback to local storage
-            console.error(
+            logger.error(
               "[bulkUploadPapers] Supabase upload failed, using local storage:",
               uploadError
             );
             if (uploadError && uploadError.stack) {
-              console.error(
+              logger.error(
                 "[bulkUploadPapers] Supabase error stack:",
                 uploadError.stack
               );
             }
-            console.error("[bulkUploadPapers] File info:", {
+            logger.error("[bulkUploadPapers] File info:", {
               originalname: file.originalname,
               filename: file.filename,
               size: file.size,
               path: file.path,
             });
             if (req.user) {
-              console.error(
+              logger.error(
                 "[bulkUploadPapers] User:",
                 req.user._id,
                 req.user.email || req.user.username || ""
@@ -612,17 +615,17 @@ exports.bulkUploadPapers = async (req, res) => {
         uploadedPapers.push(paper);
       } catch (error) {
         // Detailed per-file error logging
-        console.error(
+        logger.error(
           "[bulkUploadPapers] Error uploading file:",
           file.originalname,
           error
         );
         if (error && error.stack) {
-          console.error("[bulkUploadPapers] Stack:", error.stack);
+          logger.error("[bulkUploadPapers] Stack:", error.stack);
         }
-        console.error("[bulkUploadPapers] File info:", file);
+        logger.error("[bulkUploadPapers] File info:", file);
         if (req.user) {
-          console.error(
+          logger.error(
             "[bulkUploadPapers] User:",
             req.user._id,
             req.user.email || req.user.username || ""
@@ -656,15 +659,15 @@ exports.bulkUploadPapers = async (req, res) => {
     // Delete uploaded files on error
     if (!req.file) {
       // Extra error details for Multer errors
-      console.error("[UPLOAD ERROR] Multer file missing.");
-      console.error(
+      logger.error("[UPLOAD ERROR] Multer file missing.");
+      logger.error(
         `[UPLOAD ERROR] Request method: ${req.method}, path: ${req.path}`
       );
-      console.error("[UPLOAD ERROR] Headers:", req.headers);
+      logger.error("[UPLOAD ERROR] Headers:", req.headers);
       if (req.body && Object.keys(req.body).length > 0) {
-        console.error("[UPLOAD ERROR] Form fields:", Object.keys(req.body));
+        logger.error("[UPLOAD ERROR] Form fields:", Object.keys(req.body));
       } else {
-        console.error("[UPLOAD ERROR] No form fields detected.");
+        logger.error("[UPLOAD ERROR] No form fields detected.");
       }
       return res.status(400).json({
         success: false,
@@ -678,13 +681,13 @@ exports.bulkUploadPapers = async (req, res) => {
       });
     }
     // Detailed error logging
-    console.error("[bulkUploadPapers] Error:", error);
+    logger.error("[bulkUploadPapers] Error:", error);
     if (error && error.stack) {
-      console.error("[bulkUploadPapers] Stack:", error.stack);
+      logger.error("[bulkUploadPapers] Stack:", error.stack);
     }
-    console.error("[bulkUploadPapers] Request body:", req.body);
+    logger.error("[bulkUploadPapers] Request body:", req.body);
     if (req.user) {
-      console.error(
+      logger.error(
         "[bulkUploadPapers] User:",
         req.user._id,
         req.user.email || req.user.username || ""
@@ -767,7 +770,8 @@ exports.getTitlesByDepartmentAndYear = async (req, res) => {
       status: "approved",
     })
       .select("course fileName fileUrl downloads createdAt _id")
-      .sort({ course: 1 });
+      .sort({ course: 1 })
+      .lean();
 
     res.json({
       success: true,
@@ -781,3 +785,4 @@ exports.getTitlesByDepartmentAndYear = async (req, res) => {
     });
   }
 };
+

@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const Redis = require("redis");
 const redisClient = require("../config/redis");
 
@@ -110,7 +111,7 @@ async function storeQuestionMap(userId, testId, questionMap) {
       cleanExpiredMaps();
     }
   } catch (error) {
-    console.warn("[ShuffleUtils] Failed to store question map:", error.message);
+    logger.warn("[ShuffleUtils] Failed to store question map:", error.message);
     // Continue without storing - will use fallback scoring
   }
 }
@@ -137,7 +138,7 @@ async function getQuestionMap(userId, testId) {
       }
     }
   } catch (error) {
-    console.warn(
+    logger.warn(
       "[ShuffleUtils] Failed to retrieve question map:",
       error.message,
     );
@@ -159,7 +160,7 @@ async function cleanupQuestionMap(userId, testId) {
       global.questionMaps.delete(key);
     }
   } catch (error) {
-    console.warn(
+    logger.warn(
       "[ShuffleUtils] Failed to cleanup question map:",
       error.message,
     );
@@ -198,3 +199,4 @@ module.exports = {
   cleanupQuestionMap,
   generateAnswerHash,
 };
+

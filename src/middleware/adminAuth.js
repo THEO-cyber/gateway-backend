@@ -1,4 +1,4 @@
-const User = require("../models/User");
+﻿const User = require("../models/User");
 
 // Middleware to check if user is admin
 exports.isAdmin = async (req, res, next) => {
@@ -22,7 +22,7 @@ exports.isAdmin = async (req, res, next) => {
     res.status(500).json({
       success: false,
       message: "Authorization error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -49,7 +49,8 @@ exports.isActiveUser = async (req, res, next) => {
     res.status(500).json({
       success: false,
       message: "Authorization error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
+

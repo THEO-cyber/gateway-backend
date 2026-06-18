@@ -5,9 +5,10 @@ const connectDB = async () => {
   try {
     // Optimized MongoDB connection options for scalability
     const options = {
-      // Connection pooling options
-      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
-      minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE) || 2,
+      // Connection pooling options — 50 concurrent DB ops handles ~10k concurrent HTTP users
+      // (Node is async so 50 connections supports far more than 50 simultaneous requests)
+      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 50,
+      minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE) || 5,
       maxIdleTimeMS: parseInt(process.env.DB_MAX_IDLE_TIME) || 30000,
       serverSelectionTimeoutMS:
         parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 5000,

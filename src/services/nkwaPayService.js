@@ -1,7 +1,7 @@
-// src/services/nkwaPayService.js
-const axios = require("axios");
+﻿const axios = require("axios");
 const crypto = require("crypto");
 const Payment = require("../models/Payment");
+const logger = require("../utils/logger");
 
 const NKWAPAY_BASE_URL =
   process.env.NKWAPAY_BASE_URL || "https://api.pay.staging.mynkwa.com";
@@ -86,7 +86,7 @@ async function initiateNkwaPayment({
   purpose = "registration_fee",
   description = "HND Gateway Registration Fee",
 }) {
-  console.warn(
+  logger.warn(
     "[NkwaPayService] DEPRECATED: Legacy payment function called. Use subscription system instead.",
   );
 
@@ -178,11 +178,11 @@ async function checkPaymentStatus(transactionId) {
       webhookReceived: payment.webhookReceived,
     };
   } catch (err) {
-    console.error(
+    logger.error(
       `[NkwaPayService] Error checking payment status: ${err.message}`,
     );
     if (err.response) {
-      console.error("[NkwaPayService] Nkwa Pay API error:", err.response.data);
+      logger.error("[NkwaPayService] Nkwa Pay API error:", err.response.data);
     }
     throw err;
   }
@@ -245,7 +245,7 @@ async function processWebhook(payload, signature) {
     }
 
     if (!payment) {
-      console.warn(
+      logger.warn(
         `[NkwaPayService] Webhook received for unknown payment: ${reference || transactionId}`,
       );
       return { success: false, message: "Payment not found" };
@@ -264,7 +264,7 @@ async function processWebhook(payload, signature) {
     // Update payment status based on webhook
     if (SUCCESS_STATUSES.has(normalizedStatus)) {
       await payment.markAsSuccessful(payload);
-      console.log(
+      logger.info(
         `[NkwaPayService] Payment successful: ${payment.transactionId}`,
       );
     } else if (FAILURE_STATUSES.has(normalizedStatus)) {
@@ -272,12 +272,12 @@ async function processWebhook(payload, signature) {
         payload.message || "Payment failed",
         normalizedStatus,
       );
-      console.log(`[NkwaPayService] Payment failed: ${payment.transactionId}`);
+      logger.info(`[NkwaPayService] Payment failed: ${payment.transactionId}`);
     } else {
       // Update status but don't mark as completed
       payment.status = "processing";
       await payment.save();
-      console.log(
+      logger.info(
         `[NkwaPayService] Payment status updated: ${payment.transactionId} - ${rawStatus}`,
       );
     }
@@ -288,7 +288,7 @@ async function processWebhook(payload, signature) {
       status: payment.status,
     };
   } catch (err) {
-    console.error("[NkwaPayService] Webhook processing error:", err.message);
+    logger.error("[NkwaPayService] Webhook processing error:", err.message);
     throw err;
   }
 }
@@ -330,7 +330,7 @@ async function getAllPayments(page = 1, limit = 20, filters = {}) {
       },
     };
   } catch (err) {
-    console.error("[NkwaPayService] Error fetching payments:", err.message);
+    logger.error("[NkwaPayService] Error fetching payments:", err.message);
     throw err;
   }
 }
@@ -360,14 +360,13 @@ async function initiateSubscriptionPayment(
       description,
       status: "pending",
       metadata: {
-        subscriptionId: subscriptionId.toString(),
-        isSubscriptionPayment: true,
+        ...(subscriptionId ? { subscriptionId: subscriptionId.toString(), isSubscriptionPayment: true } : {}),
       },
     });
 
     await payment.save();
 
-    console.log(
+    logger.info(
       `[NkwaPayService] Created subscription payment record: ${transactionId}`,
     );
 
@@ -380,7 +379,7 @@ async function initiateSubscriptionPayment(
       webhookUrl: process.env.WEBHOOK_URL || null,
     };
 
-    console.log(`[NkwaPayService] Initiating subscription payment:`, {
+    logger.info(`[NkwaPayService] Initiating subscription payment:`, {
       transactionId,
       amount,
       phone: formattedPhone.substring(0, 6) + "XXX", // Masked for security
@@ -388,8 +387,8 @@ async function initiateSubscriptionPayment(
     });
 
     // Debug configuration
-    console.log(`[NkwaPayService] Using URL: ${NKWAPAY_BASE_URL}/collect`);
-    console.log(
+    logger.info(`[NkwaPayService] Using URL: ${NKWAPAY_BASE_URL}/collect`);
+    logger.info(
       `[NkwaPayService] Using API Key: ${NKWAPAY_API_KEY ? NKWAPAY_API_KEY.substring(0, 5) + "..." : "NOT SET"}`,
     );
 
@@ -412,7 +411,7 @@ async function initiateSubscriptionPayment(
     payment.status = "processing";
     await payment.save();
 
-    console.log(
+    logger.info(
       `[NkwaPayService] Subscription payment initiated successfully: ${transactionId}`,
     );
 
@@ -428,7 +427,7 @@ async function initiateSubscriptionPayment(
       data: response.data,
     };
   } catch (err) {
-    console.error(
+    logger.error(
       "[NkwaPayService] Error initiating subscription payment:",
       err.message,
     );
@@ -445,14 +444,14 @@ async function initiateSubscriptionPayment(
         );
       }
     } catch (updateError) {
-      console.error(
+      logger.error(
         "[NkwaPayService] Error updating failed subscription payment:",
         updateError.message,
       );
     }
 
     if (err.response) {
-      console.error("[NkwaPayService] Nkwa Pay API error:", {
+      logger.error("[NkwaPayService] Nkwa Pay API error:", {
         status: err.response.status,
         data: err.response.data,
         headers: err.response.headers,

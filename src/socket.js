@@ -1,8 +1,29 @@
 // src/socket.js
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 const logger = require("./utils/logger");
 
 let io;
+
+// userId (string) → Set of socketIds
+const onlineUsers = new Map();
+
+const addOnlineUser = (userId, socketId) => {
+  if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
+  onlineUsers.get(userId).add(socketId);
+};
+
+const removeOnlineUser = (userId, socketId) => {
+  if (!onlineUsers.has(userId)) return false;
+  onlineUsers.get(userId).delete(socketId);
+  if (onlineUsers.get(userId).size === 0) {
+    onlineUsers.delete(userId);
+    return true; // user fully offline
+  }
+  return false;
+};
+
+const getOnlineUserIds = () => Array.from(onlineUsers.keys());
 
 function initSocket(server, redisClient) {
   io = new Server(server, {
@@ -99,25 +120,42 @@ function initSocket(server, redisClient) {
     }
   };
 
+  // Custom socket ID generator — set once, not per-connection
+  io.engine.generateId = () =>
+    `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
   // Setup Redis adapter asynchronously
   setupAdapter();
 
-  // Connection handling with performance monitoring
+  // Connection handling
   io.on("connection", (socket) => {
-    logger.info(`👤 User connected: ${socket.id}`);
+    logger.debug(`👤 Socket connected: ${socket.id}`);
 
-    // Track connection metrics
-    io.engine.generateId = (req) => {
-      return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    };
+    // Flutter app sends token after connecting to identify the user
+    socket.on("authenticate", async (token) => {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.id;
+        socket.userId = userId;
 
-    // Listen for join-room event from client (specialty/department)
+        addOnlineUser(userId, socket.id);
+
+        // Update DB
+        const User = require("./models/User");
+        await User.findByIdAndUpdate(userId, { isOnline: true, lastSeen: new Date() });
+
+        // Notify admin room
+        io.to("admin-room").emit("user-online", { userId, timestamp: new Date().toISOString() });
+        logger.debug(`✅ User ${userId} is now online`);
+      } catch {
+        logger.debug(`⚠️ Socket auth failed for ${socket.id}`);
+      }
+    });
+
     socket.on("join-room", (room) => {
-      if (room) {
+      if (room && typeof room === "string" && room.length <= 100) {
         socket.join(room);
-        logger.info(`🏠 User ${socket.id} joined room: ${room}`);
-
-        // Emit room statistics
+        logger.debug(`🏠 Socket ${socket.id} joined room: ${room}`);
         socket.emit("room-joined", {
           room,
           memberCount: io.sockets.adapter.rooms.get(room)?.size || 1,
@@ -125,21 +163,32 @@ function initSocket(server, redisClient) {
       }
     });
 
-    // Handle leave room
     socket.on("leave-room", (room) => {
       if (room) {
         socket.leave(room);
-        logger.info(`🚪 User ${socket.id} left room: ${room}`);
+        logger.debug(`🚪 Socket ${socket.id} left room: ${room}`);
       }
     });
 
-    // Handle ping for connection health
     socket.on("ping", () => {
       socket.emit("pong", { timestamp: Date.now() });
     });
 
-    socket.on("disconnect", (reason) => {
-      logger.info(`👋 User disconnected: ${socket.id} (Reason: ${reason})`);
+    socket.on("disconnect", async (reason) => {
+      logger.debug(`👋 Socket disconnected: ${socket.id} (${reason})`);
+
+      if (socket.userId) {
+        const fullyOffline = removeOnlineUser(socket.userId, socket.id);
+        if (fullyOffline) {
+          const User = require("./models/User");
+          await User.findByIdAndUpdate(socket.userId, { isOnline: false, lastSeen: new Date() });
+          io.to("admin-room").emit("user-offline", {
+            userId: socket.userId,
+            lastSeen: new Date().toISOString(),
+          });
+          logger.debug(`🔴 User ${socket.userId} is now offline`);
+        }
+      }
     });
 
     // Handle connection errors
@@ -210,5 +259,6 @@ module.exports = {
   sendMessageToUser,
   broadcastToRoom,
   getSocketStats,
+  getOnlineUserIds,
   getIO,
 };

@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const express = require("express");
 const router = express.Router();
 const subscriptionController = require("../controllers/subscriptionController");
@@ -8,7 +9,6 @@ const {
   checkExpiredSubscriptions,
 } = require("../middleware/subscriptionAuth");
 const {
-  validateSubscription,
   validateObjectId,
   sanitizeInput,
 } = require("../middleware/validation");
@@ -98,13 +98,15 @@ router.post("/admin/expire-check", isAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[SubscriptionRoutes] Admin expire check error:", error);
+    logger.error("[SubscriptionRoutes] Admin expire check error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to check expirations",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
 
 module.exports = router;
+
+

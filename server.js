@@ -217,56 +217,25 @@ const gracefulShutdown = async (signal) => {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-// Handle unhandled promise rejections (LOG BUT DON'T SHUTDOWN)
+// Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
-  if (process.env.NODE_ENV === "production") {
-    logger.error("💥 Unhandled rejection occurred");
-    logger.info("🔄 Production mode: Server will continue running");
-    return;
-  }
-
-  // Only log detailed errors in development
   logger.error(`💥 Unhandled Rejection: ${err.message}`);
-  logger.error(`🔍 Stack trace: ${err.stack}`);
-  logger.warn("⚠️ Server continuing to run despite unhandled rejection");
-  logger.warn(
-    "🔧 Development mode: Server continuing but investigate this error",
-  );
+  logger.error(`🔍 Stack: ${err.stack}`);
+  // Exit cleanly — the process manager (PM2/Render) will restart
+  gracefulShutdown("UNHANDLED_REJECTION");
 });
 
-// Handle uncaught exceptions (LOG AND ATTEMPT RECOVERY)
+// Handle uncaught exceptions
 process.on("uncaughtException", (err) => {
-  // For specific errors that we can recover from, don't shutdown
+  // EADDRINUSE is always fatal regardless
   if (err.code === "EADDRINUSE") {
-    logger.error("❌ Port already in use - this needs manual intervention");
-    process.exit(1); // Only exit for port conflicts
-    return;
+    logger.error(`❌ Port ${PORT} already in use`);
+    process.exit(1);
   }
 
-  if (err.code === "ECONNREFUSED" || err.code === "ETIMEDOUT") {
-    logger.warn(
-      "⚠️ Network error detected, but server can continue without external dependencies",
-    );
-    return; // Don't shutdown for network errors
-  }
-
-  // For production, try to keep running unless it's critical
-  if (process.env.NODE_ENV === "production") {
-    logger.error("🚨 Critical error occurred, attempting to continue");
-    logger.info("🔄 Server will attempt to continue serving users");
-
-    // Give it a moment to stabilize
-    setTimeout(() => {
-      logger.info("✅ Server stabilized after critical error");
-    }, 1000);
-
-    return; // Don't shutdown in production
-  }
-
-  // Only log detailed errors in development
   logger.error(`💥 Uncaught Exception: ${err.message}`);
-  logger.error(`🔍 Stack trace: ${err.stack}`);
-  logger.error("🔧 Development mode: Shutting down for debugging");
+  logger.error(`🔍 Stack: ${err.stack}`);
+  // Exit cleanly — running with corrupted state is worse than restarting
   gracefulShutdown("UNCAUGHT_EXCEPTION");
 });
 

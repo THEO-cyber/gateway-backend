@@ -9,14 +9,14 @@ const subscriptionSchema = new mongoose.Schema(
     },
     planType: {
       type: String,
-      enum: ["paper_download"],
+      enum: ["paper_download", "daily", "weekly", "monthly", "four_month", "ai_monthly", "per_course"],
       required: true,
     },
     courserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",
       required: function () {
-        return this.planType === "per_course"; // Only per_course requires specific course
+        return this.planType === "per_course";
       },
     },
     amount: {
@@ -52,55 +52,44 @@ const subscriptionSchema = new mongoose.Schema(
       default: false,
     },
     features: {
-      courseAccess: {
-        type: Boolean,
-        default: false,
-      },
-      testAccess: {
-        type: Boolean,
-        default: false,
-      },
-      aiAccess: {
-        type: Boolean,
-        default: false,
-      },
-      aiTokenLimit: {
-        type: Number,
-        default: 0,
-      },
-      unlimitedAI: {
-        type: Boolean,
-        default: false,
-      },
+      courseAccess: { type: Boolean, default: false },
+      testAccess:   { type: Boolean, default: false },
+      aiAccess:     { type: Boolean, default: false },
+      aiTokenLimit: { type: Number, default: 0 },
+      unlimitedAI:  { type: Boolean, default: false },
     },
     metadata: {
-      courseName: String,
-      planDetails: String,
-      renewalNotified: {
-        type: Boolean,
-        default: false,
-      },
+      courseName:       String,
+      planDetails:      String,
+      renewalNotified:  { type: Boolean, default: false },
     },
+
+    // Admin-managed fields
+    adminNote:           { type: String },
+    lastModifiedBy:      { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    lastModifiedAt:      { type: Date },
+    cancelledBy:         { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    cancelledAt:         { type: Date },
+    cancellationReason:  { type: String },
   },
   {
     timestamps: true,
   },
 );
 
-// Optimized indexes for scalability
-subscriptionSchema.index({ userId: 1, status: 1, endDate: 1 }); // Compound index for active subscription queries
-subscriptionSchema.index({ userId: 1, planType: 1, courserId: 1 }); // For specific plan checks
-subscriptionSchema.index({ endDate: 1, status: 1 }); // For expiration queries
-subscriptionSchema.index({ transactionId: 1 }); // For payment tracking
-subscriptionSchema.index({ createdAt: -1 }); // For recent subscriptions
-subscriptionSchema.index({ "features.unlimitedAI": 1, status: 1 }); // For AI access checks
+// Indexes
+subscriptionSchema.index({ userId: 1, status: 1, endDate: 1 });
+subscriptionSchema.index({ userId: 1, planType: 1, courserId: 1 });
+subscriptionSchema.index({ endDate: 1, status: 1 });
+subscriptionSchema.index({ transactionId: 1 });
+subscriptionSchema.index({ createdAt: -1 });
+subscriptionSchema.index({ "features.unlimitedAI": 1, status: 1 });
 
-// Virtual for checking if subscription is active
+// Virtual: true only when status=active AND endDate is in the future
 subscriptionSchema.virtual("isActive").get(function () {
   return this.status === "active" && this.endDate > new Date();
 });
 
-// Virtual for next billing date
 subscriptionSchema.virtual("nextBillingDate").get(function () {
   if (this.autoRenew && this.status === "active" && this.endDate) {
     return this.endDate;
@@ -108,48 +97,21 @@ subscriptionSchema.virtual("nextBillingDate").get(function () {
   return null;
 });
 
-// Virtual for formatted next billing info
 subscriptionSchema.virtual("nextBillingInfo").get(function () {
   if (this.status === "pending") {
-    return {
-      date: null,
-      formatted: "Pending activation",
-      type: "pending",
-    };
+    return { date: null, formatted: "Pending activation", type: "pending" };
   } else if (this.autoRenew && this.status === "active" && this.endDate) {
-    return {
-      date: this.endDate,
-      formatted: new Date(this.endDate).toLocaleDateString(),
-      type: "renewal",
-    };
+    return { date: this.endDate, formatted: new Date(this.endDate).toLocaleDateString(), type: "renewal" };
   } else if (this.status === "active" && this.endDate) {
-    return {
-      date: this.endDate,
-      formatted: `Expires ${new Date(this.endDate).toLocaleDateString()}`,
-      type: "expiry",
-    };
+    return { date: this.endDate, formatted: `Expires ${new Date(this.endDate).toLocaleDateString()}`, type: "expiry" };
   } else if (this.status === "expired") {
-    return {
-      date: null,
-      formatted: "Expired",
-      type: "expired",
-    };
+    return { date: null, formatted: "Expired", type: "expired" };
   } else if (this.status === "cancelled") {
-    return {
-      date: null,
-      formatted: "Cancelled",
-      type: "cancelled",
-    };
-  } else {
-    return {
-      date: null,
-      formatted: "N/A",
-      type: "none",
-    };
+    return { date: null, formatted: "Cancelled", type: "cancelled" };
   }
+  return { date: null, formatted: "N/A", type: "none" };
 });
 
-// Static method to get user's active subscriptions
 subscriptionSchema.statics.getActiveSubscriptions = function (userId) {
   return this.find({
     userId,
@@ -158,107 +120,69 @@ subscriptionSchema.statics.getActiveSubscriptions = function (userId) {
   }).populate("courserId", "name");
 };
 
-// Static method to check specific plan access
-subscriptionSchema.statics.hasActivePlan = async function (
-  userId,
-  planType,
-  courseId = null,
-) {
-  const query = {
-    userId,
-    planType,
-    status: "active",
-    endDate: { $gt: new Date() },
-  };
-
-  if (courseId) {
-    query.courserId = courseId;
-  }
-
-  const subscription = await this.findOne(query);
-  return !!subscription;
+subscriptionSchema.statics.hasActivePlan = async function (userId, planType, courseId = null) {
+  const query = { userId, planType, status: "active", endDate: { $gt: new Date() } };
+  if (courseId) query.courserId = courseId;
+  return !!(await this.findOne(query));
 };
 
-// Instance method to renew subscription
 subscriptionSchema.methods.renew = function (months = 1) {
   const currentEnd = this.endDate > new Date() ? this.endDate : new Date();
-  this.endDate = new Date(
-    currentEnd.getTime() + months * 30 * 24 * 60 * 60 * 1000,
-  );
+  this.endDate = new Date(currentEnd.getTime() + months * 30 * 24 * 60 * 60 * 1000);
   this.status = "active";
   this.metadata.renewalNotified = false;
   return this.save();
 };
 
-// Pre-save middleware to set end date based on plan type
+// Pre-save: calculate endDate and features based on planType
 subscriptionSchema.pre("save", function (next) {
-  console.log("[Subscription Model] Pre-save middleware triggered", {
-    isNew: this.isNew,
-    hasEndDate: !!this.endDate,
-    planType: this.planType,
-  });
-
   if (this.isNew && !this.endDate) {
     const startDate = this.startDate || new Date();
 
-    // Initialize features object if not exists
-    if (!this.features) {
-      this.features = {};
-    }
+    if (!this.features) this.features = {};
 
     switch (this.planType) {
       case "daily":
-      case "per_course": // Backward compatibility
-        // Course access for 1 day
+      case "per_course":
         this.endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
         this.features.courseAccess = true;
         this.features.testAccess = true;
         break;
       case "weekly":
-        // 1 week
         this.endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
         this.features.courseAccess = true;
         this.features.testAccess = true;
         break;
       case "monthly":
-        // 1 month
         this.endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
         this.features.courseAccess = true;
         this.features.testAccess = true;
         break;
       case "four_month":
-        // 4 months
-        this.endDate = new Date(
-          startDate.getTime() + 4 * 30 * 24 * 60 * 60 * 1000,
-        );
+        this.endDate = new Date(startDate.getTime() + 4 * 30 * 24 * 60 * 60 * 1000);
         this.features.courseAccess = true;
         this.features.testAccess = true;
         break;
       case "ai_monthly":
-        // 1 month AI access
         this.endDate = new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
         this.features.aiAccess = true;
         this.features.unlimitedAI = true;
         break;
+      case "paper_download": {
+        const months = parseInt(process.env.PAPER_DOWNLOAD_SUBSCRIPTION_MONTHS, 10) || 9;
+        this.endDate = new Date(startDate.getTime() + months * 30 * 24 * 60 * 60 * 1000);
+        break;
+      }
     }
-
-    console.log("[Subscription Model] EndDate set to:", this.endDate);
   }
   next();
 });
 
-// Static method to expire old subscriptions
 subscriptionSchema.statics.expireOldSubscriptions = async function () {
-  const result = await this.updateMany(
-    {
-      status: "active",
-      endDate: { $lt: new Date() },
-    },
-    {
-      status: "expired",
-    },
+  return this.updateMany(
+    { status: "active", endDate: { $lt: new Date() } },
+    { status: "expired" },
   );
-  return result;
 };
 
 module.exports = mongoose.model("Subscription", subscriptionSchema);

@@ -1,4 +1,4 @@
-const User = require("../models/User");
+﻿const User = require("../models/User");
 const Subscription = require("../models/Subscription");
 const redisClient = require("../config/redis");
 const logger = require("../utils/logger");
@@ -190,7 +190,7 @@ exports.requireCourseAccess = async (req, res, next) => {
     return res.status(500).json({
       success: false,
       message: "Failed to verify course access",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -250,11 +250,11 @@ exports.requireTestAccess = async (req, res, next) => {
       ],
     });
   } catch (error) {
-    console.error("[SubscriptionMiddleware] Test access check error:", error);
+    logger.error("[SubscriptionMiddleware] Test access check error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to verify test access",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -352,7 +352,7 @@ exports.requireAIAccess = async (req, res, next) => {
     return res.status(500).json({
       success: false,
       message: "Failed to verify AI access",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -419,14 +419,14 @@ exports.requireEnrollmentAccess = async (req, res, next) => {
       ],
     });
   } catch (error) {
-    console.error(
+    logger.error(
       "[SubscriptionMiddleware] Enrollment access check error:",
       error,
     );
     return res.status(500).json({
       success: false,
       message: "Failed to verify enrollment access",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -455,14 +455,14 @@ exports.requireAdminOrAccess = (service) => {
         requiredSubscription: service,
       });
     } catch (error) {
-      console.error(
+      logger.error(
         `[SubscriptionMiddleware] Admin or ${service} access check error:`,
         error,
       );
       return res.status(500).json({
         success: false,
         message: `Failed to verify ${service} access`,
-        error: error.message,
+        ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
       });
     }
   };
@@ -528,3 +528,5 @@ exports.checkExpiredSubscriptions = async (req, res, next) => {
 };
 
 module.exports = exports;
+
+

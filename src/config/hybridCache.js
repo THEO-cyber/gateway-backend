@@ -98,13 +98,17 @@ class HybridCache {
       }
 
       // Try persistent cache
-      value = this.persistentCache.get(key);
-      if (value !== undefined) {
-        this.stats.hits++;
-        logger.debug(`🎯 Persistent cache hit: ${key}`);
-        // Promote to fast cache
-        this.fastCache.set(key, value, 600);
-        return typeof value === "string" ? JSON.parse(value) : value;
+      const entry = this.persistentCache.get(key);
+      if (entry !== undefined) {
+        // Evict if expired
+        if (entry.expiresAt && entry.expiresAt < Date.now()) {
+          this.persistentCache.delete(key);
+        } else {
+          this.stats.hits++;
+          logger.debug(`🎯 Persistent cache hit: ${key}`);
+          this.fastCache.set(key, entry.value, 600);
+          return typeof entry.value === "string" ? JSON.parse(entry.value) : entry.value;
+        }
       }
 
       this.stats.misses++;
@@ -130,10 +134,12 @@ class HybridCache {
       // Set in LRU cache for medium-term storage
       this.lruCache.set(key, serializedValue, { ttl: ttl * 1000 });
 
-      // For important data, also set in persistent cache
+      // For long-term data, also store with expiry metadata so optimize() can evict
       if (ttl > 300) {
-        // Long-term data
-        this.persistentCache.set(key, serializedValue);
+        this.persistentCache.set(key, {
+          value: serializedValue,
+          expiresAt: Date.now() + ttl * 1000,
+        });
       }
 
       this.stats.sets++;
@@ -286,10 +292,9 @@ class HybridCache {
    * Periodic cleanup and optimization
    */
   optimize() {
-    // Clear expired entries from persistent cache
     const now = Date.now();
-    for (const [key, value] of this.persistentCache.entries()) {
-      if (typeof value === "object" && value.expires && value.expires < now) {
+    for (const [key, entry] of this.persistentCache.entries()) {
+      if (entry.expiresAt && entry.expiresAt < now) {
         this.persistentCache.delete(key);
       }
     }

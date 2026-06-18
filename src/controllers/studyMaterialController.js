@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 // @route   POST /api/study-materials/:id/download
 // @desc    Track a download for a study material
 // @access  Public or Private (as needed)
@@ -84,7 +85,7 @@ exports.createStudyMaterial = async (req, res) => {
         materialData.fileUrl = url;
         materialData.storagePath = uploadPath;
       } catch (uploadError) {
-        console.error("Supabase upload failed:", uploadError);
+        logger.error("Supabase upload failed:", uploadError);
         return res.status(500).json({
           success: false,
           message: "Failed to upload study material to Supabase.",
@@ -116,7 +117,7 @@ exports.createStudyMaterial = async (req, res) => {
       material,
     });
   } catch (error) {
-    console.error("Upload error:", error); // Log full error stack
+    logger.error("Upload error:", error); // Log full error stack
     res.status(500).json({
       success: false,
       message: "Failed to create study material",
@@ -144,7 +145,8 @@ exports.getAllStudyMaterials = async (req, res) => {
 
     const materials = await StudyMaterial.find(query)
       .populate("uploadedBy", "email firstName lastName")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
@@ -152,7 +154,7 @@ exports.getAllStudyMaterials = async (req, res) => {
       total: materials.length,
     });
   } catch (error) {
-    console.error("getAllStudyMaterials error:", error);
+    logger.error("getAllStudyMaterials error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch study materials",
@@ -191,7 +193,7 @@ exports.deleteStudyMaterial = async (req, res) => {
           await fs.unlink(filePath);
         }
       } catch (error) {
-        console.error("Error deleting file:", error);
+        logger.error("Error deleting file:", error);
         // Continue with database deletion even if file deletion fails
       }
     }
@@ -243,3 +245,4 @@ exports.toggleVisibility = async (req, res) => {
     });
   }
 };
+

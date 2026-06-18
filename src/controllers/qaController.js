@@ -35,7 +35,8 @@ exports.getQuestions = async (req, res) => {
       .sort(sort)
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
-      .select("-likedBy -answers.likedBy");
+      .select("-likedBy -answers.likedBy")
+      .lean();
 
     const total = await Question.countDocuments(query);
 
@@ -549,7 +550,8 @@ exports.searchQuestions = async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(50)
-      .select("-likedBy -answers.likedBy");
+      .select("-likedBy -answers.likedBy")
+      .lean();
 
     res.json({
       success: true,
@@ -571,7 +573,8 @@ exports.getMyQuestions = async (req, res) => {
   try {
     const questions = await Question.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
-      .select("-likedBy -answers.likedBy");
+      .select("-likedBy -answers.likedBy")
+      .lean();
 
     res.json({
       success: true,

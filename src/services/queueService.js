@@ -121,9 +121,9 @@ emailQueue.process("sendEmail", async (job) => {
     logger.info("📧 Processing email job...");
 
     const emailService = require("./emailService");
-    const { to, subject, template, data } = job.data;
+    const { to, subject, html, text } = job.data;
 
-    await emailService.sendEmail(to, subject, template, data);
+    await emailService({ to, subject, html, text });
     logger.info(`📧 Email sent to: ${to}`);
   } catch (error) {
     logger.warn(`⚠️ Email send failed: ${error.message}`);
@@ -150,6 +150,104 @@ const addToQueue = async (queueName, jobName, data, options = {}) => {
   }
 };
 
+// ── Test notification helpers ─────────────────────────────────────────────────
+
+const parseTestDateTime = (date, timeStr) => {
+  const d = new Date(date);
+  const match24 = timeStr.match(/^(\d{1,2}):(\d{2})/);
+  const match12 = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+
+  if (match12) {
+    let hours = parseInt(match12[1]);
+    const mins = parseInt(match12[2]);
+    const period = match12[3].toUpperCase();
+    if (period === "PM" && hours !== 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+    d.setHours(hours, mins, 0, 0);
+  } else if (match24) {
+    d.setHours(parseInt(match24[1]), parseInt(match24[2]), 0, 0);
+  } else {
+    return null;
+  }
+  return d;
+};
+
+const runTestNotificationCheck = async () => {
+  try {
+    const Test = require("../models/Test");
+    const Enrollment = require("../models/Enrollment");
+    const User = require("../models/User");
+    const { notifyUsers, notifications } = require("./notificationService");
+
+    const now = Date.now();
+    const thirtyMinsMs = 30 * 60 * 1000;
+
+    // Only check scheduled tests whose date is today or in the future
+    const tests = await Test.find({
+      status: "scheduled",
+      date: { $gte: new Date(now - thirtyMinsMs - 60000) }, // don't check old tests
+      $or: [
+        { "notificationsSent.thirtyMinWarning": false },
+        { "notificationsSent.testStarted": false },
+      ],
+    });
+
+    for (const test of tests) {
+      const startTime = parseTestDateTime(test.date, test.time);
+      if (!startTime) continue;
+
+      const msUntilStart = startTime.getTime() - now;
+
+      // ── 30-minute warning window (between 31 min and 29 min before start) ──
+      if (
+        !test.notificationsSent.thirtyMinWarning &&
+        msUntilStart <= thirtyMinsMs + 60000 &&
+        msUntilStart > thirtyMinsMs - 60000
+      ) {
+        const enrolledEmails = await Enrollment.find({ testId: test._id }).distinct("studentEmail");
+        const allDeptUsers = await User.find({ department: test.department, isActive: true, isBanned: false }).select("_id email");
+
+        const enrolledIds = allDeptUsers.filter((u) => enrolledEmails.includes(u.email)).map((u) => u._id);
+        const unenrolledIds = allDeptUsers.filter((u) => !enrolledEmails.includes(u.email)).map((u) => u._id);
+
+        if (enrolledIds.length) {
+          await notifyUsers(enrolledIds, notifications.testThirtyMinWarningEnrolled(test.title, test.time));
+        }
+        if (unenrolledIds.length) {
+          await notifyUsers(unenrolledIds, notifications.testThirtyMinWarningUnenrolled(test.title, test.time));
+        }
+
+        await Test.findByIdAndUpdate(test._id, { "notificationsSent.thirtyMinWarning": true });
+        logger.info(`[TestNotify] 30-min warning sent for "${test.title}" (${enrolledIds.length} enrolled, ${unenrolledIds.length} unenrolled)`);
+      }
+
+      // ── Test start: within 1 minute past start time ──
+      if (
+        !test.notificationsSent.testStarted &&
+        msUntilStart <= 60000 &&
+        msUntilStart > -60000
+      ) {
+        const enrolledEmails = await Enrollment.find({ testId: test._id }).distinct("studentEmail");
+        const enrolledUsers = await User.find({ email: { $in: enrolledEmails }, isActive: true }).select("_id");
+        const enrolledIds = enrolledUsers.map((u) => u._id);
+
+        if (enrolledIds.length) {
+          await notifyUsers(enrolledIds, notifications.testStarted(test.title));
+        }
+
+        // Also mark test as active
+        await Test.findByIdAndUpdate(test._id, {
+          status: "active",
+          "notificationsSent.testStarted": true,
+        });
+        logger.info(`[TestNotify] Test started notification sent to ${enrolledIds.length} enrolled users for "${test.title}"`);
+      }
+    }
+  } catch (error) {
+    logger.error(`[TestNotify] Scheduler error: ${error.message}`);
+  }
+};
+
 const scheduleRecurringJobs = async () => {
   try {
     logger.info("📦 Setting up recurring background jobs...");
@@ -169,6 +267,10 @@ const scheduleRecurringJobs = async () => {
       },
       24 * 60 * 60 * 1000,
     );
+
+    // Test notification scheduler — runs every minute
+    setInterval(runTestNotificationCheck, 60 * 1000);
+    logger.info("✅ Test notification scheduler started (checks every 60s)");
 
     logger.info("✅ Scheduled recurring background jobs");
     return true;

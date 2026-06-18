@@ -10,7 +10,40 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: false, // Not required for Google OAuth users
+    select: false,
+  },
+
+  // Google OAuth
+  googleId: {
+    type: String,
+    sparse: true,
+    index: true,
+  },
+  authProvider: {
+    type: String,
+    enum: ["local", "google"],
+    default: "local",
+  },
+
+  // Email Verification
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  emailVerificationToken: {
+    type: String,
+    select: false,
+  },
+  emailVerificationExpire: {
+    type: Date,
+    select: false,
+  },
+
+  // Push Notification Token (Firebase FCM)
+  fcmTokens: {
+    type: [String],
+    default: [],
     select: false,
   },
   firstName: {
@@ -133,14 +166,31 @@ const userSchema = new mongoose.Schema({
     },
   },
 
-  resetPasswordOTP: String,
-  resetPasswordExpire: Date,
+  resetPasswordOTP: { type: String, select: false },
+  resetPasswordExpire: { type: Date, select: false },
   resetPasswordAttempts: {
     type: Number,
     default: 0,
+    select: false,
   },
-  resetPasswordCooldown: Date,
+  resetPasswordCooldown: { type: Date, select: false },
+
+  // Refresh Token
+  refreshToken: { type: String, select: false },
+  refreshTokenExpire: { type: Date, select: false },
+  lastSeen: {
+    type: Date,
+    default: null,
+  },
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
     type: Date,
     default: Date.now,
   },
@@ -237,13 +287,20 @@ userSchema.statics.resetMonthlyAITokens = async function () {
 };
 
 // Optimized indexes for scalability
-// Note: email index is created automatically due to unique: true in schema definition
-userSchema.index({ role: 1 }); // For admin queries
-userSchema.index({ isActive: 1, isBanned: 1 }); // For user status checks
-userSchema.index({ "subscriptions.hasActiveSubscription": 1 }); // For subscription queries
-userSchema.index({ "aiTokens.resetDate": 1, "accessLevel.unlimited": 1 }); // For token reset queries
-userSchema.index({ department: 1, yearOfStudy: 1 }); // For filtering students
-userSchema.index({ createdAt: -1 }); // For recent users
-userSchema.index({ paymentStatus: 1 }); // For payment tracking
+userSchema.index({ role: 1 });
+userSchema.index({ isActive: 1, isBanned: 1 });
+userSchema.index({ "subscriptions.hasActiveSubscription": 1 });
+userSchema.index({ "aiTokens.resetDate": 1, "accessLevel.unlimited": 1 });
+userSchema.index({ department: 1, yearOfStudy: 1 });
+userSchema.index({ createdAt: -1 });
+userSchema.index({ paymentStatus: 1 });
+userSchema.index({ emailVerified: 1 });
+userSchema.index({ emailVerificationToken: 1 }, { sparse: true });
+
+// Keep updatedAt current on every save
+userSchema.pre("save", function (next) {
+  this.updatedAt = new Date();
+  next();
+});
 
 module.exports = mongoose.model("User", userSchema);

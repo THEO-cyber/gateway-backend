@@ -150,7 +150,8 @@ exports.getAllUsers = async (req, res) => {
       .select("-password -resetPasswordOTP -resetPasswordExpire")
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .lean();
 
     const total = await User.countDocuments(query);
 
@@ -168,7 +169,7 @@ exports.getAllUsers = async (req, res) => {
         });
 
         return {
-          ...user.toObject(),
+          ...user,
           stats: {
             papersUploaded,
             questionsAsked,
@@ -204,9 +205,9 @@ exports.getAllUsers = async (req, res) => {
 // @access  Private (Admin only)
 exports.getUserDetails = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select(
-      "-password -resetPasswordOTP -resetPasswordExpire"
-    );
+    const user = await User.findById(req.params.id)
+      .select("-password -resetPasswordOTP -resetPasswordExpire")
+      .lean();
 
     if (!user) {
       return res.status(404).json({
@@ -217,11 +218,13 @@ exports.getUserDetails = async (req, res) => {
 
     const papers = await PastPaper.find({ uploadedBy: user._id })
       .select("fileName course department year createdAt")
-      .limit(10);
+      .limit(10)
+      .lean();
 
     const questions = await Question.find({ userId: user._id })
       .select("question subject createdAt answersCount")
-      .limit(10);
+      .limit(10)
+      .lean();
 
     res.json({
       success: true,
@@ -345,7 +348,8 @@ exports.getPendingPapers = async (req, res) => {
     const papers = await PastPaper.find()
       .sort({ createdAt: -1 })
       .populate("uploadedBy", "email firstName lastName")
-      .limit(50);
+      .limit(50)
+      .lean();
 
     res.json({
       success: true,
@@ -437,7 +441,8 @@ exports.getPopularPapers = async (req, res) => {
     const papers = await PastPaper.find()
       .sort({ downloads: -1 })
       .limit(20)
-      .populate("uploadedBy", "email firstName lastName");
+      .populate("uploadedBy", "email firstName lastName")
+      .lean();
 
     res.json({
       success: true,
@@ -793,7 +798,8 @@ exports.getDownloadsStats = async (req, res) => {
     const topPapers = await PastPaper.find()
       .sort({ downloads: -1 })
       .limit(5)
-      .select("title courseCode downloads");
+      .select("title courseCode downloads")
+      .lean();
 
     res.json({
       success: true,

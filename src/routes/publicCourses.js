@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const express = require("express");
 const router = express.Router();
 const Course = require("../models/Course");
@@ -53,11 +54,11 @@ router.get("/public", async (req, res) => {
       message: "Subscribe to access course content and tests",
     });
   } catch (error) {
-    console.error("[CoursesRoute] Error fetching courses:", error);
+    logger.error("[CoursesRoute] Error fetching courses:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch courses",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
@@ -86,11 +87,11 @@ router.get("/public/:id", requireCourseAccess, async (req, res) => {
       message: "Course access granted",
     });
   } catch (error) {
-    console.error("[CoursesRoute] Error fetching course details:", error);
+    logger.error("[CoursesRoute] Error fetching course details:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch course details",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
@@ -173,13 +174,15 @@ router.post("/public/:id/enroll", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[CoursesRoute] Error enrolling in course:", error);
+    logger.error("[CoursesRoute] Error enrolling in course:", error);
     res.status(500).json({
       success: false,
       message: "Failed to enroll in course",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
 
 module.exports = router;
+
+

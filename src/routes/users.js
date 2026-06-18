@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const {
   getAllUsers,
@@ -12,6 +12,8 @@ const {
 const { protect } = require("../middleware/auth");
 const { isAdmin } = require("../middleware/adminAuth");
 const { validateObjectId, sanitizeInput } = require("../middleware/validation");
+const { getOnlineUserIds } = require("../socket");
+const User = require("../models/User");
 
 // Allow authenticated users to get their own profile
 router.get("/profile", protect, (req, res) => {
@@ -27,7 +29,7 @@ router.get("/profile", protect, (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch profile",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 });
@@ -46,6 +48,18 @@ router.post("/", (req, res) =>
   }),
 );
 router.get("/stats", getUserStats);
+
+// GET /api/users/online — returns all currently online users with their details
+router.get("/online", async (req, res) => {
+  try {
+    const onlineIds = getOnlineUserIds();
+    const users = await User.find({ _id: { $in: onlineIds } })
+      .select("firstName lastName email department role lastSeen isOnline");
+    res.json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to fetch online users" });
+  }
+});
 router.post("/bulk-delete", bulkDeleteUsers);
 router.post("/export", exportUsers);
 router.get("/:id", validateObjectId("id"), getUserDetails);
@@ -53,3 +67,4 @@ router.put("/:id", validateObjectId("id"), updateUser);
 router.delete("/:id", validateObjectId("id"), deleteUser);
 
 module.exports = router;
+

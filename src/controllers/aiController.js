@@ -1,3 +1,4 @@
+﻿const logger = require("../utils/logger");
 const OpenAI = require("openai");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -47,11 +48,11 @@ exports.chat = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("OpenAI Error:", error);
+    logger.error("OpenAI Error:", error);
     res.status(500).json({
       success: false,
       message: "AI service temporarily unavailable",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
@@ -100,7 +101,9 @@ exports.explain = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Explanation service unavailable",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
     });
   }
 };
+
+
