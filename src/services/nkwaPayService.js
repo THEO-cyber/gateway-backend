@@ -313,7 +313,7 @@ async function getAllPayments(page = 1, limit = 20, filters = {}) {
     const skip = (page - 1) * limit;
 
     const payments = await Payment.find(query)
-      .populate("userId", "username email firstName lastName")
+      .populate("userId", "email firstName lastName")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

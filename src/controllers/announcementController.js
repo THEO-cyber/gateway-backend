@@ -1,5 +1,7 @@
 ﻿const logger = require("../utils/logger");
 const Announcement = require("../models/Announcement");
+const User = require("../models/User");
+const { notifyUsers } = require("../services/notificationService");
 
 // @route   GET /api/announcements
 // @desc    Get all announcements with filters
@@ -114,12 +116,11 @@ exports.createAnnouncement = async (req, res) => {
       createdBy: req.user._id,
     });
 
-    // Emit websocket event to the specialty/department room for real-time update
+    // Emit websocket event for users who have the app open
     try {
       const { getIO } = require("../socket");
       const io = getIO();
       if (io) {
-        // Use targetAudience as the room name (e.g., "ltm", "swe", or "all")
         const room = announcement.targetAudience || "all";
         io.to(room).emit("new-announcement", {
           id: announcement._id,
@@ -133,8 +134,31 @@ exports.createAnnouncement = async (req, res) => {
         });
       }
     } catch (e) {
-      // Log but don't block response
       logger.error("WebSocket emit error:", e.message);
+    }
+
+    // Send FCM push notification to reach users with app closed
+    try {
+      const userQuery = { isActive: true };
+      if (announcement.targetAudience && announcement.targetAudience !== "all") {
+        userQuery.department = announcement.targetAudience;
+      }
+      const targetUsers = await User.find(userQuery).select("_id").lean();
+      const userIds = targetUsers.map((u) => u._id.toString());
+
+      if (userIds.length > 0) {
+        const categoryEmoji = { general: "📢", academic: "📚", event: "🎉", urgent: "🚨" };
+        const emoji = categoryEmoji[announcement.category] || "📢";
+        notifyUsers(userIds, {
+          title: `${emoji} ${announcement.title}`,
+          body: announcement.message.length > 100
+            ? announcement.message.substring(0, 97) + "..."
+            : announcement.message,
+          data: { type: "announcement", announcementId: announcement._id.toString() },
+        }).catch((err) => logger.error("[Announcement] FCM push failed:", err.message));
+      }
+    } catch (e) {
+      logger.error("[Announcement] FCM notification error:", e.message);
     }
 
     res.status(201).json({

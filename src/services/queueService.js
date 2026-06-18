@@ -90,27 +90,10 @@ subscriptionQueue.process("checkSubscriptionExpiry", async (job) => {
 
 tokenQueue.process("refreshUserTokens", async (job) => {
   try {
-    logger.info("🔄 Refreshing user tokens...");
-
+    logger.info("🔄 Refreshing monthly AI tokens...");
     const User = require("../models/User");
-
-    const usersToRefresh = await User.find({
-      "tokens.expiresAt": { $lt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-      hasActiveSubscription: true,
-    }).limit(100);
-
-    for (const user of usersToRefresh) {
-      user.tokens = {
-        used: 0,
-        total: user.subscriptionTier === "premium" ? 10000 : 5000,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      };
-      await user.save();
-
-      logger.info(`🔄 Tokens refreshed for user: ${user._id}`);
-    }
-
-    logger.info(`✅ Refreshed tokens for ${usersToRefresh.length} users`);
+    const result = await User.resetMonthlyAITokens();
+    logger.info(`✅ Monthly AI tokens reset for ${result.modifiedCount} users`);
   } catch (error) {
     logger.error(`❌ Token refresh error: ${error.message}`);
   }

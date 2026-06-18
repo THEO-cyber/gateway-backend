@@ -102,7 +102,7 @@ exports.getQuickStats = async (req, res) => {
     today.setHours(0, 0, 0, 0);
 
     const activeToday = await User.countDocuments({
-      lastLogin: { $gte: today },
+      lastSeen: { $gte: today },
     });
 
     const pendingApprovals = await PastPaper.countDocuments({

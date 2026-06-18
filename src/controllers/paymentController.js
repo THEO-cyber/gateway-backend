@@ -386,7 +386,7 @@ exports.getStats = async (req, res) => {
 
     // Get recent payments
     const recentPayments = await Payment.find()
-      .populate("userId", "username email firstName lastName")
+      .populate("userId", "email firstName lastName")
       .sort({ createdAt: -1 })
       .limit(5);
 
@@ -407,7 +407,6 @@ exports.getStats = async (req, res) => {
           phoneNumber: p.phoneNumber,
           user: p.userId
             ? {
-                username: p.userId.username,
                 email: p.userId.email,
                 name: `${p.userId.firstName || ""} ${p.userId.lastName || ""}`.trim(),
               }
