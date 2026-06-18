@@ -166,6 +166,22 @@ exports.enrollInTest = async (req, res) => {
   }
 };
 
+// @route   GET /api/tests/enrollment-counts
+// @desc    Get enrollment counts for all tests in one query (Admin)
+// @access  Private (Admin only)
+exports.getEnrollmentCounts = async (req, res) => {
+  try {
+    const counts = await Enrollment.aggregate([
+      { $group: { _id: "$testId", count: { $sum: 1 }, submitted: { $sum: { $cond: ["$submitted", 1, 0] } } } },
+    ]);
+    const map = {};
+    counts.forEach((c) => { map[c._id.toString()] = { enrolled: c.count, submitted: c.submitted }; });
+    res.json({ success: true, data: map });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to fetch enrollment counts", error: error.message });
+  }
+};
+
 // @route   GET /api/tests/:id/enrollments
 // @desc    Get all enrollments for a test (Admin)
 // @access  Private (Admin only)

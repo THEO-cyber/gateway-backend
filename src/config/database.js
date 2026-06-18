@@ -5,37 +5,28 @@ const connectDB = async () => {
   try {
     // Optimized MongoDB connection options for scalability
     const options = {
-      // Connection pooling options — 50 concurrent DB ops handles ~10k concurrent HTTP users
-      // (Node is async so 50 connections supports far more than 50 simultaneous requests)
-      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 50,
-      minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE) || 5,
-      maxIdleTimeMS: parseInt(process.env.DB_MAX_IDLE_TIME) || 30000,
-      serverSelectionTimeoutMS:
-        parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 5000,
+      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
+      minPoolSize: parseInt(process.env.DB_MIN_POOL_SIZE) || 2,
+      maxIdleTimeMS: parseInt(process.env.DB_MAX_IDLE_TIME) || 60000,
 
-      // Connection behavior
-      connectTimeoutMS: parseInt(process.env.DB_CONNECT_TIMEOUT) || 5000, // Reduced from 10s
-      socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 20000, // Reduced from 45s
+      // Atlas TLS handshake needs more time than a local connection
+      serverSelectionTimeoutMS: parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 15000,
+      connectTimeoutMS: parseInt(process.env.DB_CONNECT_TIMEOUT) || 15000,
+      socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 30000,
 
-      // Topology options
-      heartbeatFrequencyMS: 30000, // Increased from 10s to reduce network calls
+      heartbeatFrequencyMS: 30000,
       retryWrites: true,
       retryReads: true,
 
-      // Write concern for performance
       writeConcern: {
-        w: process.env.NODE_ENV === "production" ? "majority" : 1,
-        j: process.env.NODE_ENV === "production",
-        wtimeout: 5000,
+        w: 1, // "majority" on M0 free tier adds latency with no real durability gain
+        j: false,
+        wtimeout: 10000,
       },
 
-      // Read preference for scalability
-      readPreference:
-        process.env.NODE_ENV === "production"
-          ? "secondaryPreferred"
-          : "primary",
+      // Always use primary — Atlas M0 free tier has no readable secondaries
+      readPreference: "primary",
 
-      // Buffer settings (removed deprecated options)
       bufferCommands: false,
     };
 

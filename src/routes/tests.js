@@ -19,6 +19,7 @@ const {
 const {
   enrollInTest,
   getTestEnrollments,
+  getEnrollmentCounts,
   submitTest,
   getTestSubmissions,
   getStudentSubmission,
@@ -44,7 +45,10 @@ router.delete("/:id", protect, isAdmin, deleteTest);
 router.post("/:id/questions", protect, isAdmin, addQuestions);
 router.get("/:id/questions", getTestQuestions);
 
-// Enrollment routes (require test access subscription)
+// Bulk enrollment counts for all tests (must be before /:id routes)
+router.get("/enrollment-counts", protect, isAdmin, getEnrollmentCounts);
+
+// Enrollment routes
 router.post("/:id/enroll", protect, updateSubscriptionStatus, enrollInTest);
 router.get("/:id/enrollments", protect, isAdmin, getTestEnrollments);
 
