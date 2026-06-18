@@ -4,8 +4,7 @@
   "description": "HND Gateway Educational Platform Backend",
   "main": "server.js",
   "scripts": {
-    "start": "nodemon --no-deprecation server.js",
-    "start:prod": "node --no-deprecation server.js",
+    "start": "node --no-deprecation server.js",
     "start:cluster": "node --no-deprecation cluster.js",
     "dev": "nodemon --no-deprecation server.js",
     "test": "jest --forceExit --runInBand --detectOpenHandles",
