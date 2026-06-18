@@ -240,8 +240,13 @@ class PerformanceMonitor {
       const connectionStatus = getConnectionStatus();
       const dbStats = await getDbStats();
 
+      // If stats returned successfully, the DB is reachable regardless of readyState.
+      // readyState can briefly show "disconnected" during Atlas reconnection windows
+      // even while queries are succeeding — trust the query result over the state flag.
+      const healthy = dbStats !== null || connectionStatus.state === "connected";
+
       return {
-        healthy: connectionStatus.state === "connected",
+        healthy,
         connection: connectionStatus,
         stats: dbStats,
       };
