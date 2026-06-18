@@ -28,15 +28,15 @@ const {
   getEnrolledTests,
 } = require("../controllers/enrollmentController");
 
-// Test management routes (Admin)
+// Static routes — must all come before /:id to avoid being swallowed
 router.post("/", protect, isAdmin, createTest);
 router.get("/", getAllTests);
-router.get("/enrolled", getEnrolledTests); // Student's enrolled tests
-router.get("/results", getStudentResults); // Must come before /:id
-router.get(
-  "/:id/result-detail",
-  require("../controllers/enrollmentController").getResultDetail,
-);
+router.get("/enrolled", getEnrolledTests);
+router.get("/results", getStudentResults);
+router.get("/enrollment-counts", protect, isAdmin, getEnrollmentCounts);
+
+// Dynamic /:id routes
+router.get("/:id/result-detail", require("../controllers/enrollmentController").getResultDetail);
 router.get("/:id", getTestById);
 router.put("/:id", protect, isAdmin, updateTest);
 router.delete("/:id", protect, isAdmin, deleteTest);
@@ -44,9 +44,6 @@ router.delete("/:id", protect, isAdmin, deleteTest);
 // Questions management (Admin)
 router.post("/:id/questions", protect, isAdmin, addQuestions);
 router.get("/:id/questions", getTestQuestions);
-
-// Bulk enrollment counts for all tests (must be before /:id routes)
-router.get("/enrollment-counts", protect, isAdmin, getEnrollmentCounts);
 
 // Enrollment routes
 router.post("/:id/enroll", protect, updateSubscriptionStatus, enrollInTest);
