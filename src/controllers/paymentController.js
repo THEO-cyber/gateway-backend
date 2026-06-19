@@ -203,7 +203,7 @@ exports.checkStatus = async (req, res) => {
 
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to check payment status",
+      message: "Failed to check payment status",
     });
   }
 };

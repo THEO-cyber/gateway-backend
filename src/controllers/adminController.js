@@ -59,7 +59,7 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -87,7 +87,7 @@ exports.getSimplifiedDashboardStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch dashboard stats",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -123,7 +123,7 @@ exports.getQuickStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch quick stats",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -195,7 +195,7 @@ exports.getAllUsers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch users",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -238,7 +238,7 @@ exports.getUserDetails = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch user details",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -274,7 +274,7 @@ exports.updateUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update user",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -289,12 +289,6 @@ exports.deleteUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Missing or invalid user ID in request.",
-        details: {
-          userId,
-          method: req.method,
-          url: req.originalUrl,
-          timestamp: new Date().toISOString(),
-        },
       });
     }
 
@@ -304,12 +298,6 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "User not found.",
-        details: {
-          userId,
-          method: req.method,
-          url: req.originalUrl,
-          timestamp: new Date().toISOString(),
-        },
       });
     }
 
@@ -322,20 +310,12 @@ exports.deleteUser = async (req, res) => {
     res.json({
       success: true,
       message: "User and associated content deleted successfully",
-      details: { userId },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: "Failed to delete user",
-      error: error.message,
-      stack: error.stack,
-      details: {
-        userId: req.params.id,
-        method: req.method,
-        url: req.originalUrl,
-        timestamp: new Date().toISOString(),
-      },
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -359,7 +339,7 @@ exports.getPendingPapers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch papers",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -388,7 +368,7 @@ exports.deleteAnyQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete question",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -428,7 +408,7 @@ exports.deleteAnyAnswer = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete answer",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -452,7 +432,7 @@ exports.getPopularPapers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch popular papers",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -503,7 +483,7 @@ exports.getActiveUsers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch active users",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -661,7 +641,7 @@ exports.getUserStatsForDashboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch user statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -710,7 +690,7 @@ exports.getPapersStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch papers statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -760,7 +740,7 @@ exports.getQaStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch Q&A statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -814,7 +794,7 @@ exports.getDownloadsStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch downloads statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -856,7 +836,7 @@ exports.getAnnouncementsStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch announcements statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -894,7 +874,7 @@ exports.getCoursesStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch courses statistics",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -972,7 +952,7 @@ exports.getRecentActivity = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch recent activity",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

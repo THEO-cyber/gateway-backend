@@ -120,7 +120,7 @@ const tempLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_MAX) || 500,
   message: "Too many requests from this client, please try again later.",
-  standardHeaders: true,
+  standardHeaders: false,
   legacyHeaders: false,
   keyGenerator: buildRateLimitKey,
   skip: (req) =>
@@ -267,14 +267,11 @@ app.use("/api/paper-payment", require("./routes/paperPayment"));
 // Subscription routes
 app.use("/api/subscriptions", require("./routes/subscriptions"));
 
-// Simple test route for Vercel deployment
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "HND Gateway Backend API",
-    version: "2.0.0",
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development",
   });
 });
 
@@ -291,50 +288,31 @@ app.get("/api", (req, res) => {
   });
 });
 
-// Health check with detailed system status
+// Health check — minimal public endpoint
 app.get("/health", async (req, res) => {
   try {
-    const health = await performanceMonitor.performHealthCheck();
-    const status = {
-      status: "OK",
+    const mongoose = require("mongoose");
+    const isDbHealthy = mongoose.connection.readyState === 1;
+    res.status(isDbHealthy ? 200 : 503).json({
+      status: isDbHealthy ? "OK" : "DEGRADED",
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      version: process.env.npm_package_version || "1.0.0",
-      environment: process.env.NODE_ENV || "development",
-      health,
-    };
-
-    // Return 503 if critical components are unhealthy
-    const isHealthy = health?.database?.healthy && health?.memory?.healthy;
-    res.status(isHealthy ? 200 : 503).json(status);
-  } catch (error) {
-    res.status(503).json({
-      status: "ERROR",
-      timestamp: new Date().toISOString(),
-      error: error.message,
     });
+  } catch {
+    res.status(503).json({ status: "ERROR", timestamp: new Date().toISOString() });
   }
 });
 
-// Lightweight keep-alive endpoint (no database checks, good for rate-limit testing)
 app.get("/keepalive", (req, res) => {
-  res.json({
-    status: "OK",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  });
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// Performance metrics endpoint
-app.get("/metrics", async (req, res) => {
+// Performance metrics endpoint — admin-only
+app.get("/metrics", require("./middleware/auth").protect, require("./middleware/adminAuth").isAdmin, async (req, res) => {
   try {
     const report = performanceMonitor.generatePerformanceReport();
     res.json(report);
-  } catch (error) {
-    res.status(500).json({
-      error: "Failed to generate metrics",
-      message: error.message,
-    });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to generate metrics" });
   }
 });
 

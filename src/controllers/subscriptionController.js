@@ -173,7 +173,6 @@ exports.subscribe = async (req, res) => {
         success: false,
         message: `Invalid subscription plan. Available plans: ${Object.keys(SUBSCRIPTION_PLANS).join(", ")}`,
         availablePlans: Object.keys(SUBSCRIPTION_PLANS),
-        receivedPlan: req.body.planType,
       });
     }
 

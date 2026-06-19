@@ -453,10 +453,11 @@ exports.resetPassword = async (req, res) => {
 // ── Get Me ────────────────────────────────────────────────────────────────────
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).lean();
-    res.json({ success: true, data: user });
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    res.json({ success: true, data: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Server error", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

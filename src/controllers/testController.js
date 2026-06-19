@@ -33,7 +33,7 @@ exports.createTest = async (req, res) => {
 
     res.status(201).json({ success: true, test });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to create test", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to create test", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -71,7 +71,7 @@ exports.getAllTests = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to fetch tests", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to fetch tests", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -88,7 +88,7 @@ exports.getTestById = async (req, res) => {
 
     res.json({ success: true, test });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to fetch test", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to fetch test", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -139,7 +139,7 @@ exports.updateTest = async (req, res) => {
 
     res.json({ success: true, test });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to update test", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to update test", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -158,7 +158,7 @@ exports.deleteTest = async (req, res) => {
 
     res.json({ success: true, message: "Test and related data deleted successfully" });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to delete test", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to delete test", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -181,7 +181,7 @@ exports.addQuestions = async (req, res) => {
 
     res.json({ success: true, questionsCount: test.questions.length, message: `${test.questions.length} questions added successfully` });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to add questions", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to add questions", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -232,7 +232,7 @@ exports.getTestQuestions = async (req, res) => {
     });
   } catch (error) {
     logger.error("[GetQuestions] Error:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch questions", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to fetch questions", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 

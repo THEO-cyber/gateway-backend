@@ -58,7 +58,7 @@ exports.getPapers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -71,10 +71,7 @@ exports.uploadPaper = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message:
-          "Please upload a PDF file. The field name must be 'file'. If you see a MulterError: Unexpected field, check that your form-data key is 'file'.",
-        hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
-        receivedFields: Object.keys(req.body),
+        message: "Please upload a PDF file using the 'file' field name.",
       });
     }
 
@@ -171,18 +168,10 @@ exports.uploadPaper = async (req, res) => {
       }
     }
     // Detailed error logging
-    if (
-      error &&
-      error.name === "MulterError" &&
-      error.code === "LIMIT_UNEXPECTED_FILE"
-    ) {
+    if (error && error.name === "MulterError" && error.code === "LIMIT_UNEXPECTED_FILE") {
       res.status(400).json({
         success: false,
-        message:
-          "MulterError: Unexpected field. The file field name must be 'file'.",
-        hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
-        receivedFields: Object.keys(req.body),
-        stack: error.stack,
+        message: "Unexpected file field. Use 'file' as the form-data key for the PDF.",
       });
       return;
     }
@@ -209,7 +198,7 @@ exports.uploadPaper = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Upload failed",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -231,7 +220,7 @@ exports.getAvailableYears = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -265,7 +254,7 @@ exports.downloadPaper = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -352,7 +341,7 @@ exports.deletePaper = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -390,7 +379,7 @@ exports.searchPapers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -633,7 +622,7 @@ exports.bulkUploadPapers = async (req, res) => {
         }
         errors.push({
           fileName: file.originalname,
-          error: error.message,
+          error: process.env.NODE_ENV !== "production" ? error.message : "Upload failed",
         });
         // Don't delete the file, keep it for debugging
       }
@@ -671,13 +660,7 @@ exports.bulkUploadPapers = async (req, res) => {
       }
       return res.status(400).json({
         success: false,
-        message:
-          "Please upload a PDF file. The field name must be 'file'. If you see a MulterError: Unexpected field, check that your form-data key is 'file'.",
-        hint: "In your frontend or API client, use 'file' as the form-data key for the PDF.",
-        receivedFields: Object.keys(req.body),
-        method: req.method,
-        path: req.path,
-        headers: req.headers,
+        message: "Please upload PDF files using the 'file' field name.",
       });
     }
     // Detailed error logging
@@ -696,7 +679,7 @@ exports.bulkUploadPapers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Bulk upload failed",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -719,7 +702,7 @@ exports.getDepartments = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to get departments",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -752,7 +735,7 @@ exports.getYearsByDepartment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch years",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -781,7 +764,7 @@ exports.getTitlesByDepartmentAndYear = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch papers",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

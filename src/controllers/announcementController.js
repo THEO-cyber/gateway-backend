@@ -171,7 +171,6 @@ exports.createAnnouncement = async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to create announcement",
-      message: error.message,
       code: "CREATE_ERROR",
     });
   }
@@ -202,24 +201,11 @@ exports.updateAnnouncement = async (req, res) => {
       data: announcement,
     });
   } catch (error) {
-    logger.error("Update announcement error:", error, {
-      params: req.params,
-      body: req.body,
-      headers: req.headers,
-      method: req.method,
-      url: req.originalUrl,
-    });
+    logger.error("Update announcement error:", error.message);
     res.status(500).json({
       success: false,
       error: "Failed to update announcement",
       code: "UPDATE_ERROR",
-      message: error.message,
-      stack: error.stack,
-      params: req.params,
-      body: req.body,
-      headers: req.headers,
-      method: req.method,
-      url: req.originalUrl,
     });
   }
 };
@@ -244,14 +230,11 @@ exports.deleteAnnouncement = async (req, res) => {
       message: "Announcement deleted successfully",
     });
   } catch (error) {
-    logger.error("Delete announcement error:", error);
+    logger.error("Delete announcement error:", error.message);
     res.status(500).json({
       success: false,
       error: "Failed to delete announcement",
       code: "DELETE_ERROR",
-      details: error.message,
-      stack: error.stack,
-      params: req.params,
     });
   }
 };

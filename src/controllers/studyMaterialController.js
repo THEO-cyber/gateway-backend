@@ -22,7 +22,7 @@ exports.trackDownload = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to track download",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -89,7 +89,7 @@ exports.createStudyMaterial = async (req, res) => {
         return res.status(500).json({
           success: false,
           message: "Failed to upload study material to Supabase.",
-          error: uploadError.message,
+          ...(process.env.NODE_ENV !== "production" && { error: uploadError.message }),
         });
       }
 
@@ -121,7 +121,7 @@ exports.createStudyMaterial = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create study material",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -158,8 +158,7 @@ exports.getAllStudyMaterials = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch study materials",
-      error: error.message,
-      stack: error.stack,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -208,7 +207,7 @@ exports.deleteStudyMaterial = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete study material",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -241,7 +240,7 @@ exports.toggleVisibility = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to toggle visibility",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

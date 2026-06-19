@@ -3,46 +3,34 @@ const router = express.Router();
 const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
 const Submission = require("../models/Submission");
+const { protect } = require("../middleware/auth");
 
 // @route   GET /api/students/profile
-// @desc    Get student profile
-// @access  Public (but requires email query param)
-router.get("/profile", async (req, res) => {
+// @desc    Get own student profile
+// @access  Private
+router.get("/profile", protect, async (req, res) => {
   try {
-    const { email } = req.query;
+    const requestedEmail = req.query.email || req.user.email;
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
+    // Students can only view their own profile; admins can view any
+    if (req.user.role !== "admin" && requestedEmail !== req.user.email) {
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    const user = await User.findOne({ email }).select("-password");
+    const user = await User.findOne({ email: requestedEmail }).select(
+      "email firstName lastName department yearOfStudy createdAt"
+    );
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found",
-      });
+      return res.status(404).json({ success: false, message: "Student not found" });
     }
 
-    const enrolledTests = await Enrollment.countDocuments({
-      studentEmail: email,
-    });
+    const [enrolledTests, completedTests] = await Promise.all([
+      Enrollment.countDocuments({ studentEmail: requestedEmail }),
+      Submission.countDocuments({ studentEmail: requestedEmail }),
+    ]);
 
-    const completedTests = await Submission.countDocuments({
-      studentEmail: email,
-    });
-
-    // Compose username (firstName + lastName)
-    const username = `${user.firstName || ""}${
-      user.lastName ? " " + user.lastName : ""
-    }`.trim();
-
-    // Find saved papers (if you have a savedPapers field or collection, otherwise return empty array)
-    let savedPapers = [];
-    // Example: If you have a SavedPaper model or a field in User, fetch here. Otherwise, leave as empty array.
+    const username = `${user.firstName || ""}${user.lastName ? " " + user.lastName : ""}`.trim();
 
     res.json({
       success: true,
@@ -55,16 +43,12 @@ router.get("/profile", async (req, res) => {
         yearOfStudy: user.yearOfStudy,
         enrolledTests,
         completedTests,
-        savedPapers,
+        savedPapers: [],
         createdAt: user.createdAt,
       },
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch profile",
-      ...(process.env.NODE_ENV !== "production" && { ...(process.env.NODE_ENV !== "production" && { error: error.message }) }),
-    });
+  } catch {
+    res.status(500).json({ success: false, message: "Failed to fetch profile" });
   }
 });
 

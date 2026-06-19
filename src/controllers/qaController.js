@@ -56,7 +56,7 @@ exports.getQuestions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -102,7 +102,7 @@ exports.getQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -139,7 +139,7 @@ exports.askQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to post question",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -184,7 +184,7 @@ exports.updateQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update question",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -220,7 +220,7 @@ exports.deleteQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete question",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -268,7 +268,7 @@ exports.answerQuestion = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to post answer",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -318,7 +318,7 @@ exports.updateAnswer = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update answer",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -367,7 +367,7 @@ exports.deleteAnswer = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete answer",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -411,7 +411,7 @@ exports.toggleQuestionLike = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -466,7 +466,7 @@ exports.toggleAnswerLike = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -522,7 +522,7 @@ exports.acceptAnswer = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to accept answer",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -561,7 +561,7 @@ exports.searchQuestions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -584,7 +584,7 @@ exports.getMyQuestions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

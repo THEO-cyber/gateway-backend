@@ -9,16 +9,13 @@ exports.getResultDetail = async (req, res) => {
     if (!id || id === "" || id === "result-detail") {
       return res.status(400).json({
         success: false,
-        message: `A valid testId must be provided in the URL (e.g. /api/tests/{testId}/result-detail). Received id: '${id}'`,
-        debug: { id, email },
+        message: "A valid testId must be provided in the URL",
       });
     }
     if (!email) {
       return res.status(400).json({
         success: false,
-        message:
-          "Student email is required in the query string (e.g. ?email=your_email)",
-        debug: { id, email },
+        message: "Student email is required in the query string",
       });
     }
     // Find the submission
@@ -29,8 +26,7 @@ exports.getResultDetail = async (req, res) => {
     if (!submission) {
       return res.status(404).json({
         success: false,
-        message: `Submission not found for testId '${id}' and email '${email}'.`,
-        debug: { id, email },
+        message: "Submission not found",
       });
     }
     // Find the test to get questions
@@ -38,8 +34,7 @@ exports.getResultDetail = async (req, res) => {
     if (!test) {
       return res.status(404).json({
         success: false,
-        message: `Test not found for testId '${id}'.`,
-        debug: { id, email },
+        message: "Test not found",
       });
     }
     // Build detailed results for each question
@@ -103,7 +98,7 @@ exports.getResultDetail = async (req, res) => {
       message: error.message.includes("Cast to ObjectId")
         ? "Invalid testId format. Please provide a valid testId in the URL."
         : "Failed to fetch result detail",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -161,7 +156,7 @@ exports.enrollInTest = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to enroll in test",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -178,7 +173,7 @@ exports.getEnrollmentCounts = async (req, res) => {
     counts.forEach((c) => { map[c._id.toString()] = { enrolled: c.count, submitted: c.submitted }; });
     res.json({ success: true, data: map });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to fetch enrollment counts", error: error.message });
+    res.status(500).json({ success: false, message: "Failed to fetch enrollment counts", ...(process.env.NODE_ENV !== "production" && { error: error.message }) });
   }
 };
 
@@ -200,7 +195,7 @@ exports.getTestEnrollments = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch enrollments",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -408,7 +403,7 @@ exports.submitTest = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to submit test",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -432,7 +427,7 @@ exports.getTestSubmissions = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch submissions",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -462,7 +457,7 @@ exports.getStudentSubmission = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch submission",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -526,7 +521,7 @@ exports.releaseResults = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to release results",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -570,7 +565,7 @@ exports.getEnrolledTests = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch enrolled tests",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -618,16 +613,12 @@ exports.getStudentResults = async (req, res) => {
     res.json({
       success: true,
       results: formattedResults,
-      debug: {
-        query: { studentEmail: email, resultsReleased: true },
-        found: results.length,
-      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: "Failed to fetch results",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
