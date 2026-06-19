@@ -6,15 +6,19 @@ const router = express.Router();
 
 // POST /api/execute
 router.post("/execute", async (req, res) => {
-  const { code, language, input } = req.body;
-  const clientId = process.env.JDOODLE_CLIENT_ID;
-  const clientSecret = process.env.JDOODLE_CLIENT_SECRET;
-
-  if (!code || !language) {
-    return res.status(400).json({ error: "Code and language are required." });
-  }
-
   try {
+    if (!req.body) {
+      return res.status(400).json({ error: "Request body is required." });
+    }
+
+    const { code, language, input } = req.body;
+    const clientId = process.env.JDOODLE_CLIENT_ID;
+    const clientSecret = process.env.JDOODLE_CLIENT_SECRET;
+
+    if (!code || !language) {
+      return res.status(400).json({ error: "Code and language are required." });
+    }
+
     const response = await axios.post("https://api.jdoodle.com/v1/execute", {
       script: code,
       language,
