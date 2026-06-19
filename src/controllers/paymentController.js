@@ -3,7 +3,7 @@
   checkPaymentStatus,
   processWebhook,
   getAllPayments,
-} = require("../services/nkwaPayService");
+} = require("../services/campayService");
 const Subscription = require("../models/Subscription");
 const Payment = require("../models/Payment");
 const User = require("../models/User");
@@ -212,7 +212,7 @@ exports.checkStatus = async (req, res) => {
 exports.handleWebhook = async (req, res) => {
   try {
     const signature =
-      req.headers["x-signature"] || req.headers["x-nkwa-signature"];
+      req.headers["x-campay-signature"] || req.headers["x-signature"];
     const payload = req.body;
 
     logger.info("[PaymentController] Webhook received:", {
@@ -459,7 +459,6 @@ exports.retryWebhook = async (req, res) => {
       });
     }
 
-    // Check payment status with Nkwa Pay
     const result = await checkPaymentStatus(resolvedTransactionId);
     const refreshedPayment = await Payment.findByTransactionId(
       resolvedTransactionId,

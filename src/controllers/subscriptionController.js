@@ -3,7 +3,7 @@ const Subscription = require("../models/Subscription");
 const User = require("../models/User");
 const Course = require("../models/Course");
 const Payment = require("../models/Payment");
-const nkwaPayService = require("../services/nkwaPayService");
+const campayService = require("../services/campayService");
 const { notifyUser, notifications } = require("../services/notificationService");
 const sendEmail = require("../services/emailService");
 const { buildPaymentSuccessEmail } = require("../services/emailService");
@@ -62,7 +62,7 @@ const reconcilePendingSubscriptions = async (limit = 100) => {
       // Force refresh pending/processing payments from Nkwa before deciding
       if (["pending", "processing"].includes(payment.status)) {
         try {
-          await nkwaPayService.checkPaymentStatus(payment.transactionId);
+          await campayService.checkPaymentStatus(payment.transactionId);
         } catch (statusError) {
           logger.warn(
             `[SubscriptionController] Payment status refresh failed for ${payment.transactionId}: ${statusError.message}`,
@@ -230,8 +230,8 @@ exports.subscribe = async (req, res) => {
 
     await subscription.save();
 
-    // Initiate payment via Nkwa Pay
-    const paymentResult = await nkwaPayService.initiateSubscriptionPayment(
+    // Initiate payment via CamPay
+    const paymentResult = await campayService.initiateSubscriptionPayment(
       userId,
       req.user.email,
       phoneNumber,
@@ -261,12 +261,11 @@ exports.subscribe = async (req, res) => {
   } catch (error) {
     logger.error("[SubscriptionController] Error subscribing:", error.message);
 
-    // Surface Nkwa Pay rejection messages directly to the client
     const isPaymentProviderError =
-      error.message.includes("MTN collection is disabled") ||
-      error.message.includes("payment failed") ||
+      error.message.includes("Payment failed") ||
       error.message.includes("payment provider") ||
-      error.message.includes("temporarily unavailable");
+      error.message.includes("temporarily unavailable") ||
+      error.message.includes("Payment initialization failed");
 
     res.status(isPaymentProviderError ? 503 : 500).json({
       success: false,

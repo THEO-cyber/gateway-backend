@@ -5,6 +5,11 @@ uploads/
 .DS_Store
 dist/
 build/
+.claude/
+boot*.txt
+boot*_err.txt
+startup_out.txt
+startup_err.txt
 # Firebase service account keys (never commit these)
 firebase-service-account.json
 *-firebase-adminsdk-*.json
