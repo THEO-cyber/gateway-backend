@@ -19,6 +19,20 @@ const app = express();
 // Trust upstream proxy chain (Render/edge proxy) so req.ip resolves to real client IP.
 app.set("trust proxy", 1); // trust one upstream proxy (Render/nginx) — prevents X-Forwarded-For spoofing
 
+// Favicon — blue rounded square with "HG" (HND Gateway)
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="18" fill="#1d4ed8"/>
+  <text x="50" y="71" font-family="Arial Black,Arial,sans-serif" font-size="46" font-weight="900" fill="white" text-anchor="middle">HG</text>
+</svg>`;
+
+app.get("/favicon.svg", (req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.send(FAVICON_SVG);
+});
+
+app.get("/favicon.ico", (req, res) => res.redirect(301, "/favicon.svg"));
+
 // JDoodle code execution route
 app.use("/api", require("./routes/codeExecution"));
 
