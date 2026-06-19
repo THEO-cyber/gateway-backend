@@ -29,6 +29,7 @@ function initSocket(server, redisClient) {
   io = new Server(server, {
     cors: {
       origin: [
+        "https://hnd-gateway-proxy.michaelrodri091.workers.dev",
         "https://hndgatewayadminpanel.kesug.com",
         "http://hndgatewayadminpanel.kesug.com",
         "http://localhost:3000",
