@@ -318,30 +318,29 @@ exports.submitTest = async (req, res) => {
     const totalQuestions = test.questions.length;
 
     for (const answer of validAnswers) {
-      let questionIndex = answer.questionId;
+      const displayIndex = answer.questionId;
 
-      // Validate question index is within bounds
+      // Translate display index → original question index using the stored question map.
+      // If no map (shuffle failed), displayIndex === originalIndex so it still works.
+      const questionIndex = (questionMap && questionMap[displayIndex] !== undefined)
+        ? questionMap[displayIndex]
+        : displayIndex;
+
       if (questionIndex >= 0 && questionIndex < totalQuestions) {
         const question = test.questions[questionIndex];
-        // Translate displayed option letter back to original letter (options were shuffled per-user)
+        // Translate displayed option letter → original letter (options were shuffled per-user)
         const displayedAnswer = answer.selectedAnswer;
         const translatedAnswer = (optionMaps[questionIndex] && optionMaps[questionIndex][displayedAnswer])
           ? optionMaps[questionIndex][displayedAnswer]
           : displayedAnswer;
         if (question && question.correctAnswer === translatedAnswer) {
           score++;
-          logger.info(
-            `[SubmitTest] Correct: Q${questionIndex} displayed=${displayedAnswer} original=${translatedAnswer}`,
-          );
+          logger.info(`[SubmitTest] Correct: display Q${displayIndex}→orig Q${questionIndex} ${displayedAnswer}→${translatedAnswer}`);
         } else if (question) {
-          logger.info(
-            `[SubmitTest] Incorrect: Q${questionIndex} displayed=${displayedAnswer} original=${translatedAnswer} correct=${question.correctAnswer}`,
-          );
+          logger.info(`[SubmitTest] Wrong: display Q${displayIndex}→orig Q${questionIndex} ${displayedAnswer}→${translatedAnswer} correct=${question.correctAnswer}`);
         }
       } else {
-        logger.warn(
-          `[SubmitTest] Invalid question index: ${questionIndex} for ObjectId: ${answer.originalQuestionObjectId}`,
-        );
+        logger.warn(`[SubmitTest] Invalid question index: display=${displayIndex} orig=${questionIndex}`);
       }
     }
 

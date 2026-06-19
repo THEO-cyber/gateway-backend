@@ -212,8 +212,7 @@ exports.getTestQuestions = async (req, res) => {
         );
         optionMaps[q.originalIndex] = optionMap;
         return {
-          questionId: q.originalIndex,
-          displayIndex,
+          questionId: displayIndex,      // display order — used as submission key
           question: q.question,
           options: shuffledOptions,
         };
@@ -226,7 +225,6 @@ exports.getTestQuestions = async (req, res) => {
       logger.warn("[GetQuestions] Shuffling failed, using original order:", shuffleError.message);
       questionsForStudent = test.questions.map((q, index) => ({
         questionId: index,
-        index,
         question: q.question,
         options: q.options,
       }));
