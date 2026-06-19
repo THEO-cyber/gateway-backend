@@ -203,16 +203,25 @@ exports.getTestQuestions = async (req, res) => {
     try {
       const shuffleUtils = require("../utils/shuffleUtils");
       const { shuffledQuestions, questionMap } = shuffleUtils.shuffleQuestions(test.questions, userId, testId);
-      await shuffleUtils.storeQuestionMap(userId, testId, questionMap);
 
-      questionsForStudent = shuffledQuestions.map((q, displayIndex) => ({
-        questionId: q.originalIndex,
-        displayIndex,
-        question: q.question,
-        options: q.options,
-      }));
+      // Shuffle answer options for every question and collect option maps for scoring
+      const optionMaps = {};
+      questionsForStudent = shuffledQuestions.map((q, displayIndex) => {
+        const { shuffledOptions, optionMap } = shuffleUtils.shuffleOptionsForQuestion(
+          q.options, userId, testId, q.originalIndex
+        );
+        optionMaps[q.originalIndex] = optionMap;
+        return {
+          questionId: q.originalIndex,
+          displayIndex,
+          question: q.question,
+          options: shuffledOptions,
+        };
+      });
+
+      await shuffleUtils.storeQuestionMap(userId, testId, questionMap, optionMaps);
       isShuffled = true;
-      logger.info(`[GetQuestions] Served ${questionsForStudent.length} shuffled questions to user ${userId}`);
+      logger.info(`[GetQuestions] Served ${questionsForStudent.length} shuffled questions+options to user ${userId}`);
     } catch (shuffleError) {
       logger.warn("[GetQuestions] Shuffling failed, using original order:", shuffleError.message);
       questionsForStudent = test.questions.map((q, index) => ({

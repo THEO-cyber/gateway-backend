@@ -58,6 +58,35 @@ function createSeededRandom(seed) {
 }
 
 /**
+ * Shuffle option letters (A/B/C/D) for a single question.
+ * Returns shuffledOptions {A,B,C,D} with reassigned text AND
+ * optionMap { displayLetter → originalLetter } so scoring can reverse it.
+ */
+function shuffleOptionsForQuestion(options, userId, testId, questionOriginalIndex) {
+  const letters = ["A", "B", "C", "D"];
+  // Different seed from question shuffle so the two are independent
+  const seed = hashString(`${userId}${testId}opt${questionOriginalIndex}`);
+  const random = createSeededRandom(seed);
+
+  const shuffledLetters = [...letters];
+  for (let i = shuffledLetters.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffledLetters[i], shuffledLetters[j]] = [shuffledLetters[j], shuffledLetters[i]];
+  }
+
+  // shuffledLetters[i] = the original letter whose text goes into display letter letters[i]
+  const shuffledOptions = {};
+  const optionMap = {}; // displayLetter → originalLetter
+  letters.forEach((displayLetter, i) => {
+    const originalLetter = shuffledLetters[i];
+    shuffledOptions[displayLetter] = options[originalLetter];
+    optionMap[displayLetter] = originalLetter;
+  });
+
+  return { shuffledOptions, optionMap };
+}
+
+/**
  * Shuffle questions with mapping for a specific user and test
  */
 function shuffleQuestions(questions, userId, testId) {
@@ -87,11 +116,11 @@ function shuffleQuestions(questions, userId, testId) {
 }
 
 /**
- * Store question mapping in Redis or memory fallback
+ * Store question + option mappings in Redis or memory fallback
  */
-async function storeQuestionMap(userId, testId, questionMap) {
+async function storeQuestionMap(userId, testId, questionMap, optionMaps = {}) {
   const key = `question_map:${userId}:${testId}`;
-  const mapData = JSON.stringify(questionMap);
+  const mapData = JSON.stringify({ questionMap, optionMaps });
 
   try {
     if (redisClient && redisClient.isConnected) {
@@ -117,31 +146,32 @@ async function storeQuestionMap(userId, testId, questionMap) {
 }
 
 /**
- * Retrieve question mapping from Redis or memory fallback
+ * Retrieve question + option mappings from Redis or memory fallback.
+ * Returns { questionMap, optionMaps } or null.
  */
 async function getQuestionMap(userId, testId) {
   const key = `question_map:${userId}:${testId}`;
 
   try {
+    let raw = null;
     if (redisClient && redisClient.isConnected) {
-      const mapData = await redisClient.get(key);
-      return mapData ? JSON.parse(mapData) : null;
-    } else {
-      // Fallback to in-memory storage
-      if (global.questionMaps && global.questionMaps.has(key)) {
-        const stored = global.questionMaps.get(key);
-        if (stored.expires > Date.now()) {
-          return stored.data;
-        } else {
-          global.questionMaps.delete(key);
-        }
+      raw = await redisClient.get(key);
+    } else if (global.questionMaps && global.questionMaps.has(key)) {
+      const stored = global.questionMaps.get(key);
+      if (stored.expires > Date.now()) {
+        raw = JSON.stringify(stored.data);
+      } else {
+        global.questionMaps.delete(key);
       }
     }
+
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Handle old format (plain questionMap object) for backward compatibility
+    if (parsed && parsed.questionMap) return parsed;
+    return { questionMap: parsed, optionMaps: {} };
   } catch (error) {
-    logger.warn(
-      "[ShuffleUtils] Failed to retrieve question map:",
-      error.message,
-    );
+    logger.warn("[ShuffleUtils] Failed to retrieve question map:", error.message);
   }
 
   return null;
@@ -194,6 +224,7 @@ function generateAnswerHash(answers, userId, testId) {
 
 module.exports = {
   shuffleQuestions,
+  shuffleOptionsForQuestion,
   storeQuestionMap,
   getQuestionMap,
   cleanupQuestionMap,

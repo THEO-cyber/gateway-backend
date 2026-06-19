@@ -236,16 +236,18 @@ exports.submitTest = async (req, res) => {
       });
     }
 
-    // Get the user's question mapping for proper scoring (optional for backward compatibility)
+    // Get question + option maps so shuffled answers can be translated back to original letters
     const shuffleUtils = require("../utils/shuffleUtils");
     let questionMap = null;
+    let optionMaps = {};
     try {
-      questionMap = await shuffleUtils.getQuestionMap(
-        req.user.id,
-        req.params.id,
-      );
+      const maps = await shuffleUtils.getQuestionMap(req.user.id, req.params.id);
+      if (maps) {
+        questionMap = maps.questionMap || null;
+        optionMaps = maps.optionMaps || {};
+      }
     } catch (error) {
-      logger.warn("[SubmitTest] Could not get question map:", error.message);
+      logger.warn("[SubmitTest] Could not get question/option maps:", error.message);
     }
 
     // Store answers exactly as sent by frontend
@@ -321,14 +323,19 @@ exports.submitTest = async (req, res) => {
       // Validate question index is within bounds
       if (questionIndex >= 0 && questionIndex < totalQuestions) {
         const question = test.questions[questionIndex];
-        if (question && question.correctAnswer === answer.selectedAnswer) {
+        // Translate displayed option letter back to original letter (options were shuffled per-user)
+        const displayedAnswer = answer.selectedAnswer;
+        const translatedAnswer = (optionMaps[questionIndex] && optionMaps[questionIndex][displayedAnswer])
+          ? optionMaps[questionIndex][displayedAnswer]
+          : displayedAnswer;
+        if (question && question.correctAnswer === translatedAnswer) {
           score++;
           logger.info(
-            `[SubmitTest] Correct answer for question ${questionIndex}: ${answer.selectedAnswer} (ObjectId: ${answer.originalQuestionObjectId})`,
+            `[SubmitTest] Correct: Q${questionIndex} displayed=${displayedAnswer} original=${translatedAnswer}`,
           );
         } else if (question) {
           logger.info(
-            `[SubmitTest] Incorrect answer for question ${questionIndex}: ${answer.selectedAnswer} (correct: ${question.correctAnswer}) (ObjectId: ${answer.originalQuestionObjectId})`,
+            `[SubmitTest] Incorrect: Q${questionIndex} displayed=${displayedAnswer} original=${translatedAnswer} correct=${question.correctAnswer}`,
           );
         }
       } else {
