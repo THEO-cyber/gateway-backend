@@ -1,59 +1,67 @@
-const nodemailer = require("nodemailer");
+const axios = require("axios");
 const logger = require("../utils/logger");
 
-let transporter = null;
+// Cache access token — valid for 1 hour, refreshed automatically
+let cachedToken = null;
+let tokenExpiry = 0;
 
-const createTransporter = () => {
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
+async function getAccessToken() {
+  if (cachedToken && Date.now() < tokenExpiry - 60000) return cachedToken;
 
-  if (!user || !pass) {
-    logger.warn("⚠️  Gmail not configured — set GMAIL_USER and GMAIL_APP_PASSWORD in .env");
-    return null;
-  }
+  const { data } = await axios.post(
+    "https://oauth2.googleapis.com/token",
+    new URLSearchParams({
+      client_id:     process.env.GMAIL_CLIENT_ID,
+      client_secret: process.env.GMAIL_CLIENT_SECRET,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+      grant_type:    "refresh_token",
+    }),
+    { timeout: 10000 }
+  );
 
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true, // SSL on port 465
-    auth: { user, pass },
-    connectionTimeout: 10000,  // 10s to connect
-    greetingTimeout: 5000,     // 5s for server greeting
-    socketTimeout: 20000,      // 20s for data transfer
-  });
-};
-
-// Lazy-initialize so hot reloads pick up new env vars
-const getTransporter = () => {
-  if (!transporter) transporter = createTransporter();
-  return transporter;
-};
-
-// Warn at startup if Gmail is not configured
-if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD ||
-    process.env.GMAIL_USER === "your-gmail@gmail.com") {
-  logger.warn("⚠️  Gmail not configured — emails will fail. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env");
-} else {
-  logger.info(`✅ Gmail email service ready (${process.env.GMAIL_USER})`);
+  cachedToken  = data.access_token;
+  tokenExpiry  = Date.now() + data.expires_in * 1000;
+  return cachedToken;
 }
 
 const FROM_NAME = process.env.EMAIL_FROM_NAME || "HND Gateway";
-const getFrom = () => `${FROM_NAME} <${process.env.GMAIL_USER}>`;
+const FROM_EMAIL = process.env.GMAIL_USER;
 
 const sendEmail = async (options) => {
-  const t = getTransporter();
-  if (!t) throw new Error("Email service not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD.");
+  if (!process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_REFRESH_TOKEN) {
+    throw new Error("Gmail OAuth2 not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN.");
+  }
 
-  const info = await t.sendMail({
-    from: options.from || getFrom(),
-    to: options.to,
-    subject: options.subject,
-    html: options.html || wrapPlainText(options.text || ""),
-    text: options.text || undefined,
-  });
+  // Build RFC 2822 message then base64url-encode it for the Gmail API
+  const message = [
+    `From: ${FROM_NAME} <${FROM_EMAIL}>`,
+    `To: ${options.to}`,
+    `Subject: ${options.subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/html; charset=UTF-8`,
+    ``,
+    options.html || `<p>${options.text || ""}</p>`,
+  ].join("\r\n");
 
-  logger.info(`Email sent to ${options.to} | messageId=${info.messageId}`);
-  return info;
+  const raw = Buffer.from(message)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  const accessToken = await getAccessToken();
+
+  const { data } = await axios.post(
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+    { raw },
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 15000,
+    }
+  );
+
+  logger.info(`Email sent to ${options.to} | id=${data.id}`);
+  return data;
 };
 
 // ── HTML template helpers ─────────────────────────────────────────────────────
@@ -88,13 +96,6 @@ function baseTemplate(title, bodyHtml) {
 </html>`;
 }
 
-function wrapPlainText(text) {
-  const escaped = text
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br/>");
-  return baseTemplate("HND Gateway", `<p style="color:#333;line-height:1.7;font-size:15px;">${escaped}</p>`);
-}
-
 // ── Named email builders ──────────────────────────────────────────────────────
 
 const buildOTPEmail = (firstName, otp) => ({
@@ -109,7 +110,7 @@ const buildOTPEmail = (firstName, otp) => ({
     <p style="color:#666;font-size:13px;text-align:center;">This OTP expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
     <p style="color:#999;font-size:12px;margin-top:32px;">If you didn't request this, you can safely ignore this email.</p>
   `),
-  text: `Your HND Gateway password reset OTP is: ${otp}\n\nExpires in 60 seconds. Do not share it.`,
+  text: `Your HND Gateway password reset OTP is: ${otp}\n\nExpires in 10 minutes. Do not share it.`,
 });
 
 const buildVerificationEmail = (firstName, verifyUrl) => ({
