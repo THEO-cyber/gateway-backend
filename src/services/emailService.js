@@ -99,7 +99,7 @@ function baseTemplate(title, bodyHtml) {
 // ── Named email builders ──────────────────────────────────────────────────────
 
 const buildOTPEmail = (firstName, otp) => ({
-  subject: "Your Password Reset OTP – HND Gateway",
+  subject: "Your Password Reset OTP For HND Gateway",
   html: baseTemplate("Password Reset OTP", `
     <h2 style="color:#1a73e8;margin-top:0;">Reset Your Password</h2>
     <p style="color:#333;font-size:15px;line-height:1.7;">Hi ${firstName || "there"},</p>
