@@ -13,8 +13,13 @@ const createTransporter = () => {
   }
 
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true, // SSL on port 465
     auth: { user, pass },
+    connectionTimeout: 10000,  // 10s to connect
+    greetingTimeout: 5000,     // 5s for server greeting
+    socketTimeout: 20000,      // 20s for data transfer
   });
 };
 
@@ -101,7 +106,7 @@ const buildOTPEmail = (firstName, otp) => ({
     <div style="text-align:center;margin:32px 0;">
       <span style="display:inline-block;background:#1a73e8;color:#fff;font-size:36px;font-weight:bold;letter-spacing:10px;padding:16px 32px;border-radius:8px;">${otp}</span>
     </div>
-    <p style="color:#666;font-size:13px;text-align:center;">This OTP expires in <strong>60 seconds</strong>. Do not share it with anyone.</p>
+    <p style="color:#666;font-size:13px;text-align:center;">This OTP expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
     <p style="color:#999;font-size:12px;margin-top:32px;">If you didn't request this, you can safely ignore this email.</p>
   `),
   text: `Your HND Gateway password reset OTP is: ${otp}\n\nExpires in 60 seconds. Do not share it.`,

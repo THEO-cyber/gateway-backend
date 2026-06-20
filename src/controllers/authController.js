@@ -339,13 +339,13 @@ exports.forgotPassword = async (req, res) => {
     }
 
     if (user.resetPasswordOTP && user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
-      const secsLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 1000);
-      return res.status(429).json({ success: false, message: `An OTP was already sent. Please wait ${secsLeft} second(s) before requesting a new one.` });
+      const minsLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / 60000);
+      return res.status(429).json({ success: false, message: `An OTP was already sent. Please check your email or wait ${minsLeft} minute(s) before requesting a new one.` });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetPasswordOTP = crypto.createHash("sha256").update(otp).digest("hex");
-    user.resetPasswordExpire = Date.now() + 60 * 1000;
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
     user.resetPasswordAttempts = 0;
     user.resetPasswordCooldown = undefined;
     await user.save();
@@ -353,7 +353,7 @@ exports.forgotPassword = async (req, res) => {
     try {
       const emailContent = buildOTPEmail(user.firstName, otp);
       await sendEmail({ to: user.email, ...emailContent });
-      res.json({ success: true, message: "OTP sent to your email. It expires in 60 seconds." });
+      res.json({ success: true, message: "OTP sent to your email. It expires in 10 minutes." });
     } catch (emailError) {
       user.resetPasswordOTP = undefined;
       user.resetPasswordExpire = undefined;
